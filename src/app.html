@@ -1956,8 +1956,10 @@ function semAcento(t){return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'
  '.ac-list button{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;border:0;background:none;padding:9px 12px;font:inherit;font-size:14px;cursor:pointer}.ac-list button:hover,.ac-list button.on{background:var(--side-2)}'+
  '.ac-list button small{color:var(--muted);font-size:12px;white-space:nowrap}.ac-list .novo{border-top:1px solid var(--line);color:var(--gold);font-weight:700}';document.head.appendChild(st)})();
 function acFechar(){var l=document.getElementById('ac-pc');if(l)l.remove()}
+function acSeg(el){var v=el.value,i=v.lastIndexOf(';');return {ini:v.slice(0,i+1),q:v.slice(i+1).trim()}}
+function acPor(el,nome){var sg=acSeg(el);var ant=sg.ini.split(';').map(function(x){return x.trim()}).filter(Boolean);ant.push(nome);el.value=ant.join('; ');el.focus()}
 function acPC(el){
-  var q=semAcento(el.value.trim());acFechar();if(!q)return;
+  var q=semAcento(acSeg(el).q);acFechar();if(!q)return;
   var hits=S.clientes.filter(function(c){return semAcento(c.nome).indexOf(q)>=0}).sort(function(a,b){
     var pa=tipoCt(a)==='Parte contrária'?0:1,pb=tipoCt(b)==='Parte contrária'?0:1;if(pa!==pb)return pa-pb;
     var sa=semAcento(a.nome).indexOf(q)===0?0:1,sb=semAcento(b.nome).indexOf(q)===0?0:1;return sa-sb||String(a.nome).localeCompare(b.nome)}).slice(0,8);
@@ -1965,17 +1967,17 @@ function acPC(el){
   var w=el.parentNode;w.classList.add('ac-box');
   var l=document.createElement('div');l.id='ac-pc';l.className='ac-list';
   l.innerHTML=hits.map(function(c){return '<button type="button" data-id="'+esc(c.id)+'"><span>'+esc(c.nome)+'</span><small>'+esc(tipoCt(c)+(c.doc?' · '+c.doc:''))+'</small></button>'}).join('')+
-    (exato||!CAN_WRITE?'':'<button type="button" class="novo" data-novo="1">+ Cadastrar “'+esc(el.value.trim())+'” como parte contrária</button>');
+    (exato||!CAN_WRITE?'':'<button type="button" class="novo" data-novo="1">+ Cadastrar “'+esc(acSeg(el).q)+'” como parte contrária</button>');
   if(!l.innerHTML)return;
   w.appendChild(l);
   l.addEventListener('mousedown',function(e){e.preventDefault()});
   l.addEventListener('click',async function(e){
     var b=e.target.closest('button');if(!b)return;
-    if(b.dataset.id){var c=byId('clientes',b.dataset.id);el.value=c.nome;CUR.base.parteContrariaId=c.id;acFechar();return}
+    if(b.dataset.id){var c=byId('clientes',b.dataset.id);acPor(el,c.nome);acFechar();return}
     if(b.dataset.novo){
-      var nome=el.value.trim();b.disabled=true;b.textContent='Cadastrando…';
+      var nome=acSeg(el).q;b.disabled=true;b.textContent='Cadastrando…';
       try{var id=await save('clientes',{nome:nome,tipo:'Parte contrária',pessoa:/\b(ltda|s\.?a\.?|eireli|me|epp|banco|condom[ií]nio|associa|companhia|cia)\b/i.test(nome)?'Jurídica':'Física'});
-        CUR.base.parteContrariaId=id;acFechar();toast('Parte contrária cadastrada em Pessoas. Complete os dados depois, se quiser.')}
+        acPor(el,nome);acFechar();toast('Parte contrária cadastrada em Pessoas. Complete os dados depois, se quiser.')}
       catch(err){toast('Não foi possível cadastrar');b.disabled=false}
     }
   });
@@ -2441,6 +2443,17 @@ function fatDocHTML(f){
 NAVSUB.calculos=[['Cálculos salvos',null],['-'],['Novo cálculo',null,'formCalculo()']];
 NAVSUB.faturas=NAVSUB.faturas.slice(0,-2).concat([['Cobrança (régua)',null,"go('cobranca')"],['-'],['Nova fatura',null,'formFatura()']]);
 NAVSUB.processos.forEach(function(x){if(x[2]==='procAutos()')x[0]='Cadastrar pelo PDF'});
+
+/* várias partes contrárias no processo, separadas por ponto e vírgula */
+(function(){var f=F_PROC.find(function(x){return x[0]==='parteContraria'});if(f){f[1]='Parte(s) contrária(s)';f[3]=f[3]||null;f[4]=1;f[5]='Para mais de uma parte, separe os nomes com ponto e vírgula ( ; )'}})();
+function partesPC(t){return String(t||'').split(';').map(function(x){return x.trim()}).filter(Boolean)}
+(function(){var _sv=save;save=async function(col,data,id){
+  if(col==='processos'&&data&&typeof data.parteContraria==='string'){
+    var ns=partesPC(data.parteContraria);data.parteContraria=ns.join('; ');
+    var ids=ns.map(function(n){var k=semAcento(n).trim();var c=S.clientes.find(function(x){return semAcento(x.nome).trim()===k});return c?c.id:''});
+    data.parteContrariaIds=ids;data.parteContrariaId=ids.length===1?ids[0]:(ids.find(Boolean)||'');
+  }
+  return _sv.apply(this,arguments)}})();
 
 boot();
 </script>
