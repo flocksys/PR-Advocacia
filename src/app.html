@@ -2341,5 +2341,8 @@ function calcDoProc(id){var cs=S.calculos.filter(function(c){return c.processo==
   if(cs.length&&confirm('Este processo já tem '+cs.length+' cálculo(s). Abrir o mais recente? (Cancelar cria um novo)')){cs.sort(function(a,b){return (b.atualizadoEm||'')<(a.atualizadoEm||'')?-1:1});return formCalculo(cs[0].id)}
   var p=byId('processos',id)||{};formCalculo(null,{processo:id,cliente:p.cliente||'',titulo:'Atualização de débito'+(p.numero?' · '+p.numero:'')})}
 
+/* menu do topo mais compacto (ícones menores) */
+document.head.insertAdjacentHTML('beforeend','<style id="nav-compacto">.nav{gap:0}.nav a{min-width:62px;padding:6px 6px 5px;gap:2px;font-size:11.5px}.nav a .ico{width:28px;height:24px;border-radius:7px}.nav a svg{width:17px;height:17px}.nav a .ct{top:1px;left:calc(50% + 6px);font-size:10px;line-height:15px;padding:0 5px}</style>');
+
 boot();
 </script>
