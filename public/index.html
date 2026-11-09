@@ -2552,6 +2552,36 @@ async function desvincular(pid,volta){if(!confirm('Desvincular este processo? Os
   varrer(document);
 })();
 
+/* tarefas vinculadas a prazos */
+F_AG.push(['prazoVinc','Prazo vinculado','text',null,1,'Escolha o prazo ao qual esta tarefa serve']);
+function prazoLabel(a){return (a.titulo||'Prazo')+' · '+fd(a.data)+(a.processo?' · '+procLabel(a.processo):'')}
+function tarefasDoPrazo(id){return S.agenda.filter(function(a){return a.prazoVinc===id})}
+(function(){var _of=openForm;openForm=function(col,title,fields,id,preset){var r=_of.apply(this,arguments);
+  if(col!=='agenda')return r;
+  try{var inp=document.getElementById('fm-prazoVinc');if(!inp)return r;var cur=(CUR&&CUR.base)||{};
+    var prazos=S.agenda.filter(function(a){return a.tipo==='Prazo'&&a.id!==id&&(a.status!=='Concluído'||a.id===cur.prazoVinc)}).sort(function(a,b){return a.data<b.data?-1:1});
+    var sel=document.createElement('select');sel.id='fm-prazoVinc';sel.name='prazoVinc';
+    sel.innerHTML='<option value="">— nenhum —</option>'+prazos.map(function(a){return '<option value="'+esc(a.id)+'"'+(a.id===cur.prazoVinc?' selected':'')+'>'+esc(prazoLabel(a))+'</option>'}).join('');
+    inp.replaceWith(sel);
+    sel.addEventListener('change',function(){var pz=byId('agenda',sel.value);if(!pz)return;var pr=document.getElementById('fm-processo');if(pr&&!pr.value&&pz.processo)pr.value=pz.processo;var cl=document.getElementById('fm-cliente');if(cl&&!cl.value&&pz.cliente)cl.value=pz.cliente});
+    var tipo=document.getElementById('fm-tipo'),box=sel.closest('.f');
+    var vis=function(){if(box)box.style.display=tipo&&tipo.value==='Prazo'?'none':''};if(tipo){tipo.addEventListener('change',vis);vis()}
+    // ao editar um prazo: lista das tarefas ligadas a ele
+    if(id&&cur.tipo==='Prazo'){var ts=tarefasDoPrazo(id),bd=document.querySelector('#dlg .bd');
+      if(bd)bd.insertAdjacentHTML('afterbegin','<div class="f full"><div class="panel" style="padding:10px 12px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px"><b>Tarefas deste prazo ('+ts.filter(function(t){return t.status!=='Concluído'}).length+' pendentes de '+ts.length+')</b><button type="button" class="btn sm" onclick="novaTarefaPrazo(\''+id+'\')">+ Tarefa para este prazo</button></div>'+
+        (ts.length?ts.sort(function(a,b){return a.data<b.data?-1:1}).map(function(t){return '<div style="display:flex;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--line);font-size:13.5px;cursor:pointer" onclick="formAgenda(\''+t.id+'\')"><span>'+(t.status==='Concluído'?'✅':'⬜')+'</span><span style="flex:1">'+esc(t.titulo||'Tarefa')+'</span><span style="color:var(--muted)">'+fd(t.data)+(t.responsavel?' · '+esc(t.responsavel):'')+'</span></div>'}).join(''):'<div class="hint">Nenhuma tarefa ligada a este prazo.</div>')+'</div></div>')}
+  }catch(e){console.warn(e)}
+  return r}})();
+function novaTarefaPrazo(id){var pz=byId('agenda',id);if(!pz)return;var d=addDays(pz.data,-2);if(d<today())d=today();
+  formAgenda(null,{tipo:'Tarefa',titulo:'Minutar: '+(pz.titulo||''),data:d,processo:pz.processo||'',cliente:pz.cliente||'',responsavel:pz.responsavel||equipe()[0]||'',prioridade:'Alta',prazoVinc:id})}
+(function(){var _c=concluirAg;concluirAg=function(id){var a=byId('agenda',id);if(a&&a.tipo==='Prazo'){var pend=tarefasDoPrazo(id).filter(function(t){return t.status!=='Concluído'});
+  if(pend.length&&!confirm('Este prazo tem '+pend.length+' tarefa(s) pendente(s): '+pend.map(function(t){return t.titulo}).join(', ')+'.\n\nConcluir o prazo mesmo assim?'))return}return _c.apply(this,arguments)}})();
+
+(function(){var _ex=exTag;exTag=function(o){var h=_ex.apply(this,arguments);try{
+  if(o&&o.prazoVinc&&S.agenda.indexOf(o)>=0){var pz=byId('agenda',o.prazoVinc);if(pz)h+=' <span class="pill" style="font-size:11px" title="Tarefa do prazo '+esc(prazoLabel(pz))+'">↳ prazo '+fd(pz.data)+'</span>'}
+  else if(o&&o.tipo==='Prazo'&&S.agenda.indexOf(o)>=0){var ts=tarefasDoPrazo(o.id);if(ts.length){var f=ts.filter(function(t){return t.status==='Concluído'}).length;h+=' <span class="pill'+(f<ts.length?' warn':' ok')+'" style="font-size:11px" title="Tarefas deste prazo">'+f+'/'+ts.length+' tarefas</span>'}}
+  }catch(e){}return h}})();
+
 boot();
 </script>
 
