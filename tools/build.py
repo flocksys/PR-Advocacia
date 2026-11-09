@@ -28,6 +28,9 @@ if shutil.which('node'):
     r = subprocess.run(['node', '--check', t.name], capture_output=True, text=True)
     if r.returncode:
         raise SystemExit('Erro de sintaxe no JavaScript de src/app.html:\n' + r.stderr[:1500])
+    r = subprocess.run(['node', '--check', str(raiz / 'public' / 'google.js')], capture_output=True, text=True)
+    if r.returncode:
+        raise SystemExit('Erro de sintaxe em public/google.js:\n' + r.stderr[:1500])
 
 # O título vai para o <head>
 m = re.match(r'\s*<title>(.*?)</title>', app)
@@ -51,6 +54,7 @@ html = f'''<!doctype html>
 </head>
 <body>
 {app}
+<script src="/google.js?v={ver('google.js')}"></script>
 </body>
 </html>
 '''
