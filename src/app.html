@@ -2169,7 +2169,11 @@ function autosAnalisar(){
       '<label style="display:flex;gap:8px;padding:4px 0;font-size:13.5px;cursor:pointer"><input type="radio" name="au-cli" value=""'+(pre?'':' checked')+'><span>Escolher depois no cadastro</span></label></div>';
   } else h+='<div class="hint">Não encontrei as partes no texto. Você poderá informá-las no cadastro.</div>';
   if(AUTOS.file&&/pdf/i.test(AUTOS.file.type||AUTOS.file.name)&&ASSETS)h+='<label style="display:flex;gap:8px;font-size:13.5px"><input type="checkbox" id="au-guardar" checked> Guardar o PDF em Documentos, vinculado ao processo</label>';
-  if(o.numero){var ja=S.processos.find(function(p){return (p.numero||'').replace(/\D/g,'')===o.numero.replace(/\D/g,'')});if(ja)h='<div class="banner warn"><span>Este processo já está cadastrado. <a href="#" onclick="closeModal();verProcesso(\''+ja.id+'\');return false">Abrir o cadastro existente</a></span></div>'+h}
+  if(o.numero){var jas=S.processos.filter(function(p){return (p.numero||'').replace(/\D/g,'')===o.numero.replace(/\D/g,'')});
+    if(jas.length){var pri=jas.find(function(p){return !p.principal})||jas[0];
+      h='<div class="banner warn" style="flex-direction:column;align-items:flex-start;gap:6px"><span>Já existe'+(jas.length>1?'m '+jas.length+' cadastros':' cadastro')+' com este número: '+jas.map(function(p){return '<a href="#" onclick="closeModal();verProcesso(\''+p.id+'\');return false">'+esc(procLabel(p.id))+'</a>'}).join(', ')+'.</span>'+
+        '<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="au-rec" data-pri="'+esc(pri.id)+'"> Este PDF é de um recurso ou incidente do processo principal (mesmo número)</label>'+
+        '<select id="au-rec-t" style="max-width:260px">'+TIPOS_VINC.filter(Boolean).map(function(t){return '<option>'+esc(t)+'</option>'}).join('')+'</select></div>'+h}}
   if(!achou)h='<div class="banner warn"><span>Não encontrei dados do processo no texto. Se o PDF for digitalizado (imagem), cadastre manualmente ou cole o texto da capa abaixo.</span></div>';
   pv.innerHTML=h;ok.disabled=!achou;
 }
@@ -2177,8 +2181,10 @@ async function autosPreencher(){
   var o=AUTOS.o;if(!o)return;
   var sel=(document.querySelector('input[name="au-cli"]:checked')||{}).value||'';
   var guardar=!!(document.getElementById('au-guardar')||{}).checked,file=AUTOS.file;
+  var rec=document.getElementById('au-rec'),recT=document.getElementById('au-rec-t');
   var pre={numero:o.numero||'',tribunal:o.tribunal||'',uf:o.uf||'',objeto:o.objeto||'',orgao:o.orgao||'',comarca:o.comarca||'',area:o.area,fase:o.fase,situacao:'Em andamento',responsavel:equipe()[0]||''};
   if(o.valorCausa!=null)pre.valorCausa=o.valorCausa;if(o.distribuicao)pre.distribuicao=o.distribuicao;
+  if(rec&&rec.checked){var pp=byId('processos',rec.getAttribute('data-pri'))||{};pre.principal=pp.id;pre.tipoVinculo=recT?recT.value:'Apelação';pre.instancia='2º grau / Tribunal';pre.fase='Recursal';if(!sel&&pp.cliente){pre.cliente=pp.cliente;pre.polo=pp.polo;pre.parteContraria=pp.parteContraria||''}}
   var notas=[];
   if(sel){
     var lado=sel[0]==='a'?o.ativos:o.passivos,outro=sel[0]==='a'?o.passivos:o.ativos,p=lado[+sel.slice(1)];
@@ -2454,6 +2460,14 @@ function partesPC(t){return String(t||'').split(';').map(function(x){return x.tr
     data.parteContrariaIds=ids;data.parteContrariaId=ids.length===1?ids[0]:(ids.find(Boolean)||'');
   }
   return _sv.apply(this,arguments)}})();
+
+/* mesmo número no principal e no recurso: identificação pelo tipo / instância */
+function procSufixo(p){if(!p)return '';if(p.principal&&p.tipoVinculo)return p.tipoVinculo+(p.instancia&&p.instancia!=='1º grau'?' · '+p.instancia.split(' /')[0]:'');
+  var n=digits(p.numero);if(n&&S.processos.some(function(x){return x.id!==p.id&&digits(x.numero)===n}))return (p.instancia||'1º grau').split(' /')[0]+(p.principal?'':' · principal');return ''}
+procLabel=function(id){var p=byId('processos',id);if(!p)return '—';var sx=procSufixo(p);return (p.numero||p.objeto||'Processo')+(sx?' ('+sx+')':'')};
+optsProc=function(cli){return S.processos.filter(function(p){return !cli||p.cliente===cli}).map(function(p){var sx=procSufixo(p);return [p.id,(p.numero||'Sem número')+(sx?' ('+sx+')':'')+' · '+nomeCli(p.cliente)]})};
+(function(){var _vp=verProcesso;verProcesso=function(id){var r=_vp.apply(this,arguments);try{var p=byId('processos',id),sx=procSufixo(p),h=document.querySelector('#dlg .hd h2');
+  if(sx&&h&&!h.querySelector('.pr-sx'))h.insertAdjacentHTML('beforeend',' <span class="pill pr-sx" style="font-size:12px;vertical-align:middle">'+esc(sx)+'</span>')}catch(e){}return r}})();
 
 boot();
 </script>
