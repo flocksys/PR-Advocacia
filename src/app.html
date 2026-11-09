@@ -1991,5 +1991,70 @@ document.addEventListener('keydown',function(ev){
 });
 document.addEventListener('input',function(ev){if(ev.target&&ev.target.id==='fm-parteContraria')ev.target.setAttribute('autocomplete','off')},true);
 
+/* ---------- leitura da publicação: tipo de prazo e agendamento ---------- */
+var NUM_EXT={um:1,uma:1,dois:2,duas:2,tres:3,quatro:4,cinco:5,seis:6,sete:7,oito:8,nove:9,dez:10,onze:11,doze:12,treze:13,quatorze:14,catorze:14,quinze:15,dezesseis:16,dezessete:17,dezoito:18,dezenove:19,vinte:20,trinta:30,sessenta:60,noventa:90};
+var MESES={janeiro:1,fevereiro:2,marco:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12};
+function pad2(n){return ('0'+n).slice(-2)}
+function acharData(t){
+  var m=t.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);var m2=t.match(/(\d{1,2})\s+de\s+(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})/);
+  var r=null;if(m&&(!m2||m.index<=m2.index))r={iso:m[3]+'-'+pad2(m[2])+'-'+pad2(m[1]),fim:m.index+m[0].length};else if(m2)r={iso:m2[3]+'-'+pad2(MESES[m2[2]])+'-'+pad2(m2[1]),fim:m2.index+m2[0].length};
+  if(!r)return null;var resto=t.slice(r.fim,r.fim+40),h=resto.match(/(\d{1,2})\s*(?:h|:|horas?)\s*(\d{2})?/);if(h&&+h[1]<24)r.hora=pad2(h[1])+':'+(h[2]||'00');return r;
+}
+function analisarPub(p){
+  var orig=String(p.texto||''),t=semAcento(orig).replace(/\s+/g,' ');
+  var mov=/referente ao movimento/.test(t);
+  // Audiência
+  var ia=t.search(/audiencia|sessao (de julgamento|virtual|presencial|telepresencial)|inclu\w+ em pauta/);
+  if(ia>=0&&/(design|redesign|marcad|agendad|art\.? ?334|pauta|sessao|realizar-se-a|sera realizada|fica mantida)/.test(t)&&!/(cancel|retirad\w* de pauta|nao realizada)/.test(t.slice(ia,ia+200))){
+    var sess=/sessao (de julgamento|virtual|presencial|telepresencial)|inclu\w+ em pauta/.test(t)&&!/audiencia/.test(t.slice(ia,ia+12));
+    var sub=sess?'Sessão de julgamento':/334|concilia/.test(t)?'Audiência de conciliação':/instrucao/.test(t)?'Audiência de instrução':/una\b/.test(t)?'Audiência una':/justificacao/.test(t)?'Audiência de justificação':/mediacao/.test(t)?'Audiência de mediação':'Audiência';
+    var d=mov?null:acharData(t.slice(ia));
+    if(d&&d.iso<(p.disponibilizacao||'')){d=null}
+    return {tipo:'Audiência',titulo:sub,data:d&&d.iso,hora:d&&d.hora,
+      desc:sub+(d?' em '+fd(d.iso)+(d.hora?' às '+d.hora:''):' designada: a data não está no texto, consulte os autos'),virtual:/videoconferencia|virtual|telepresencial|teams|zoom|webex/.test(t)};
+  }
+  // Prazo em dias
+  var m=t.match(/prazo (?:comum |legal |improrrogavel |sucessivo )?de (\d{1,3}|[a-z]+)\s*(?:\([^)]*\)\s*)?(dias?|horas)/)||t.match(/(?:em|no prazo de|dentro de)\s+(\d{1,3}|[a-z]+)\s*(?:\([^)]*\)\s*)?(dias?|horas)/);
+  var dias=null,horas=false;if(m){dias=/^\d+$/.test(m[1])?+m[1]:NUM_EXT[m[1]]||null;horas=m[2]==='horas'}
+  var fin=/contrarraz/.test(t)?'contrarrazões':/replica|impugn\w* (a|à) contestacao/.test(t)?'réplica':/especifi\w* (as )?provas/.test(t)?'especificação de provas':/alegacoes finais|memoriais/.test(t)?'alegações finais':/emend\w* (a )?(peticao )?inicial|emenda/.test(t)?'emenda à inicial':/quesitos|assistente tecnico|honorarios periciais|laudo/.test(t)?'perícia (quesitos/laudo)':/(pagar|pagamento|recolh\w*|deposit\w*|custas|preparo)/.test(t)?'pagamento/custas':/contestar|contestacao|defesa/.test(t)&&/cita/.test(t)?'contestação':/embargos de declaracao/.test(t)?'embargos de declaração':/recurso|apelacao|agravo/.test(t)&&/interpor|prazo recursal/.test(t)?'recurso':/(cumpr\w*|regulariz\w*|junt\w*|apresent\w*|traz\w*|comprov\w*|inform\w*)/.test(t)?'cumprimento de diligência':'manifestação';
+  if(dias&&!horas)return {tipo:'Prazo',finalidade:fin,dias:dias,titulo:'Prazo: '+fin,desc:'Prazo de '+dias+' dias para '+fin};
+  if(dias&&horas)return {tipo:'Prazo',finalidade:fin,dias:Math.max(1,Math.ceil(dias/24)),titulo:'Prazo: '+fin+' ('+dias+'h)',desc:'Prazo de '+dias+' horas para '+fin};
+  // Sentença / acórdão
+  if(/julgo (procedente|improcedente|parcialmente|extint)|ante o exposto,? julgo|homologo .*acordo/.test(t))return {tipo:'Prazo',finalidade:'recurso',dias:15,titulo:'Prazo recursal (sentença)',desc:'Sentença publicada: prazo de 15 dias para apelação (5 para embargos de declaração)'};
+  if(/acordam|acordao/.test(t)&&/(provimento|negaram|deram)/.test(t))return {tipo:'Prazo',finalidade:'recurso',dias:15,titulo:'Prazo recursal (acórdão)',desc:'Acórdão publicado: prazo de 15 dias para recurso especial/extraordinário (5 para embargos)'};
+  if(/cita(cao|do|da|r)\b/.test(t)&&/(contestar|contestacao|resposta|defesa)/.test(t))return {tipo:'Prazo',finalidade:'contestação',dias:15,titulo:'Prazo: contestação',desc:'Citação: prazo de 15 dias para contestar (confira o termo inicial)'};
+  if(/perici|perito/.test(t)&&/(data|dia)/.test(t)){var dp=acharData(t.slice(t.search(/perici|perito/)));if(dp&&dp.iso>=(p.disponibilizacao||''))return {tipo:'Audiência',titulo:'Perícia',data:dp.iso,hora:dp.hora,desc:'Perícia marcada para '+fd(dp.iso)+(dp.hora?' às '+dp.hora:'')}}
+  if(/ciencia/.test(t)&&!/(manifest|prazo)/.test(t))return {tipo:'Ciência',desc:'Apenas ciência: não há prazo para cumprir'};
+  if(mov&&/ato ordinatorio/.test(t))return {tipo:'Verificar',desc:'Ato ordinatório: consulte os autos para ver se há prazo'};
+  if(/(intime-se|intimem-se|intimad\w*|manifeste-se|manifestem-se|para,? querendo)/.test(t))return {tipo:'Prazo',finalidade:fin,dias:5,semDias:true,titulo:'Prazo: '+fin,desc:'Prazo não informado no texto: 5 dias úteis (art. 218, §3º, CPC). Confira na decisão'};
+  return {tipo:'Verificar',desc:'Não identifiquei prazo nem audiência: leia a publicação'};
+}
+(function(){var st=document.createElement('style');st.textContent='.pub-ia{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 2px;padding:8px 12px;border-radius:8px;background:var(--side-2);font-size:13.5px}.pub-ia b{font-weight:700}.pub-ia .btn{margin-left:auto}';document.head.appendChild(st)})();
+var _pubCardIA=pubCard;
+pubCard=function(p){
+  var h=_pubCardIA(p),a=analisarPub(p),cor={'Audiência':'warn','Prazo':'bad','Ciência':'ok','Verificar':''}[a.tipo];
+  var info=a.desc;if(a.tipo==='Prazo'&&a.dias){var dp=dataPub(p);if(dp)info+=' · vence em '+fd(somaUteis(dp,a.dias))+' (dias úteis)'}
+  var btn='';if(CAN_WRITE&&(p.status||'Nova')!=='Prazo agendado'&&(p.status||'Nova')!=='Arquivada'){
+    if(a.tipo==='Audiência')btn='<button class="btn sm pri" onclick="pubAgendarAud(\''+p.id+'\')">Agendar '+(a.titulo==='Perícia'?'perícia':a.titulo.indexOf('Sessão')===0?'sessão':'audiência')+'</button>';
+    else if(a.tipo==='Prazo')btn='<button class="btn sm pri" onclick="pubPrazo(\''+p.id+'\')">Agendar prazo</button>';}
+  var box='<div class="pub-ia"><span class="pill '+cor+'">'+esc(a.tipo==='Prazo'?'Prazo · '+a.finalidade:a.tipo==='Audiência'?a.titulo:a.tipo)+'</span><span>'+esc(info)+'</span>'+btn+'</div>';
+  if(btn)h=h.replace('<button class="btn sm pri" onclick="pubPrazo(\''+p.id+'\')">Agendar prazo</button>','');
+  return h.replace('<div class="pub-ac">',box+'<div class="pub-ac">');
+};
+function pubAgendarAud(id){
+  var p=byId('publicacoes',id),a=analisarPub(p),pr=procPorNumero(p.numero);
+  var preset={tipo:'Audiência',titulo:a.titulo+(pr?' · '+nomeCli(pr.cliente):''),data:a.data||'',hora:a.hora||'',processo:pr?pr.id:'',cliente:pr?pr.cliente:'',local:(a.virtual?'Videoconferência · ':'')+(p.orgao||''),status:'Pendente',prioridade:'Alta',coluna:'A fazer',lembrete:'1 dia antes',responsavel:equipe()[0]||'',obs:'Gerado da publicação de '+fd(p.disponibilizacao)+' ('+(p.tribunal||'')+')'+(a.data?'':'. Data a confirmar nos autos.'),publicacao:id};
+  openForm('agenda','compromisso',F_AG,null,preset,async function(nid){if(!nid)return;try{await patch('publicacoes',id,{status:'Prazo agendado'});
+    if(pr)await patch('processos',pr.id,{andamentos:(pr.andamentos||[]).concat([{data:p.disponibilizacao||today(),descricao:'Publicação: '+a.titulo+(a.data?' designada para '+fd(a.data)+(a.hora?' às '+a.hora:''):' designada'),origem:p.origem||'DJEN'}])});
+    toast(a.titulo+' agendada')}catch(e){}});
+}
+var _pubPrazoIA=pubPrazo;
+pubPrazo=function(id){
+  _pubPrazoIA(id);var p=byId('publicacoes',id),a=analisarPub(p),pr=procPorNumero(p.numero);
+  if(a.tipo==='Prazo'&&a.dias){var d=document.getElementById('pz-dias');if(d){d.value=a.dias;pzCalc(id)}
+    var t=document.getElementById('pz-tit');if(t)t.value=a.titulo+(pr?' · '+nomeCli(pr.cliente):'');
+    var f=document.getElementById('pz-fim');if(f&&f.parentNode)f.parentNode.insertAdjacentHTML('beforeend','<div class="hint" style="color:var(--gold)">Identificado na publicação: '+esc(a.desc)+'.</div>')}
+};
+
 boot();
 </script>
