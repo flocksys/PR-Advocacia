@@ -74,10 +74,13 @@
     try { await iniciar2(); }
     catch (e) { console.error(e); telaLogin('Não foi possível abrir o sistema: ' + (e && e.message || e) + '. Recarregue a página.'); }
   }
+  function passo(t) { var m = document.querySelector('#pr-login .pr-msg'); if (m) { m.className = 'pr-msg ok'; m.textContent = t; } }
   async function iniciar2() {
+    passo('Entrando… (1/3 sessão)');
     var s = (await comPrazo(sb.auth.getSession(), 15000, 'tempo esgotado ao ler a sessão')).data.session;
     if (!s || modo === 'nova') return telaLogin();
     if (location.hash.indexOf('access_token') >= 0) history.replaceState(null, '', location.pathname);
+    passo('Entrando… (2/3 acesso)');
     var r = await comPrazo(sb.rpc('meu_acesso'), 15000, 'tempo esgotado ao consultar o acesso');
     if (r.error) throw new Error(r.error.message);
     ME = r.data || { id: s.user.id, email: s.user.email, equipe: false, socio: false };

@@ -36,7 +36,7 @@ html = f'''<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>{titulo}</title>
 <meta name="robots" content="noindex">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <script src="/config.js?v={ver('config.js')}"></script>
 <script src="/shim.js?v={ver('shim.js')}"></script>
 </head>
