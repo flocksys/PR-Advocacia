@@ -2056,5 +2056,36 @@ pubPrazo=function(id){
     var f=document.getElementById('pz-fim');if(f&&f.parentNode)f.parentNode.insertAdjacentHTML('beforeend','<div class="hint" style="color:var(--gold)">Identificado na publicação: '+esc(a.desc)+'.</div>')}
 };
 
+/* ---------- recursos e incidentes vinculados ao processo principal ---------- */
+var TIPOS_VINC=['','Apelação','Agravo de instrumento','Agravo interno','Embargos de declaração','Recurso especial','Recurso extraordinário','Recurso inominado','Recurso ordinário','Recurso de revista','Agravo em recurso especial','Mandado de segurança','Cumprimento de sentença','Embargos à execução','Incidente','Outro'];
+(function(){var i=F_PROC.findIndex(function(f){return f[0]==='numero'});
+  F_PROC.splice(i+1,0,['principal','Processo principal','proc',null,0,'Preencha só se este for um recurso ou incidente'],['tipoVinculo','Tipo de recurso / incidente','select',TIPOS_VINC]);})();
+function filhosDe(id){return S.processos.filter(function(x){return x.principal===id})}
+function vincCampos(){var pr=document.getElementById('fm-principal'),tv=document.getElementById('fm-tipoVinculo');if(!pr||!tv)return;
+  [].forEach.call(pr.options,function(o){if(CUR&&CUR.id&&o.value===CUR.id)o.remove()});
+  var w=tv.closest('.f');if(w)w.style.display=pr.value?'':'none';if(!pr.value)tv.value=''}
+document.addEventListener('change',function(ev){if(ev.target&&ev.target.id==='fm-principal'){vincCampos();var tv=document.getElementById('fm-tipoVinculo');if(tv&&ev.target.value&&!tv.value)tv.value='Apelação'}});
+var _formProcessoV=formProcesso;formProcesso=function(){var r=_formProcessoV.apply(this,arguments);vincCampos();return r};
+function novoRecurso(id){var p=byId('processos',id);if(!p)return;
+  formProcesso(null,{principal:id,tipoVinculo:'Apelação',cliente:p.cliente||'',polo:p.polo||'',parteContraria:p.parteContraria||'',parteContrariaId:p.parteContrariaId||'',objeto:p.objeto||'',area:p.area||'',carteira:p.carteira||'',
+    responsavel:p.responsavel||'',advogados:p.advogados||[],tribunal:p.tribunal||'',uf:p.uf||'',situacao:'Em andamento',fase:FASES.indexOf('Recursal')>=0?'Recursal':(p.fase||''),instancia:'2º grau / Tribunal'})}
+var _verProcessoV=verProcesso;
+verProcesso=function(id){
+  _verProcessoV(id);var p=byId('processos',id);if(!p)return;var bd=document.querySelector('#dlg .bd.block');if(!bd)return;
+  var ch=bd.querySelector('.pchips');if(ch&&CAN_WRITE)ch.insertAdjacentHTML('afterbegin','<button class="chip" onclick="novoRecurso(\''+id+'\')">+ Recurso / incidente</button>');
+  var pai=p.principal&&byId('processos',p.principal);
+  if(pai){var first=bd.firstElementChild;var html='<div class="banner info" style="margin:0"><span><b>'+esc(p.tipoVinculo||'Recurso')+'</b> vinculado ao processo principal <a href="#processos" onclick="event.preventDefault();verProcesso(\''+pai.id+'\')" class="mono">'+esc(pai.numero||'sem número')+'</a> · '+esc(nomeCli(pai.cliente))+'</span></div>';if(first)first.insertAdjacentHTML('beforebegin',html)}
+  var fs=filhosDe(id);
+  if(fs.length){var sec='<div><h3>Recursos e incidentes ('+fs.length+')</h3><div class="panel rows">'+fs.map(function(f){return '<div class="row" style="cursor:pointer" onclick="verProcesso(\''+f.id+'\')"><div style="min-width:0;flex:1"><div class="t"><span class="pill info">'+esc(f.tipoVinculo||'Recurso')+'</span> <span class="mono">'+esc(f.numero||'sem número')+'</span></div><div class="s">'+esc([f.tribunal,f.instancia,f.orgao,f.situacao].filter(Boolean).join(' · '))+'</div></div></div>'}).join('')+'</div></div>';
+    var alvo=bd.querySelector('.pchips');if(alvo)alvo.insertAdjacentHTML('afterend',sec);else bd.insertAdjacentHTML('afterbegin',sec)}
+};
+var _vProcessosV=vProcessos;
+vProcessos=function(){var h=_vProcessosV();
+  S.processos.forEach(function(p){var key='<tr onclick="verProcesso(\''+p.id+'\')"><td><b class="mono">'+esc(p.numero||'Sem número')+'</b>';if(h.indexOf(key)<0)return;
+    var extra='';var pai=p.principal&&byId('processos',p.principal);if(pai)extra+=' <span class="pill info" title="Vinculado a '+esc(pai.numero||'')+'">↳ '+esc(p.tipoVinculo||'Recurso')+'</span>';
+    var n=filhosDe(p.id).length;if(n)extra+=' <span class="pill" title="Recursos e incidentes vinculados">'+n+' vinculado'+(n>1?'s':'')+'</span>';
+    if(extra)h=h.replace(key,key+extra)});
+  return h};
+
 boot();
 </script>
