@@ -6,6 +6,14 @@
     // Sem trava entre abas: a trava padrão pode ficar presa quando há mais de uma aba aberta
     lock: function (name, timeout, fn) { return fn(); } } });
   window.SB = sb;
+  // Mostra na tela qualquer erro, para facilitar o suporte
+  function avisoErro(t) {
+    var d = document.getElementById('pr-erro');
+    if (!d) { d = document.createElement('div'); d.id = 'pr-erro'; d.style.cssText = 'position:fixed;left:12px;right:12px;top:12px;z-index:10000;background:#fff3f0;border:1px solid #d9a99f;color:#8a1c12;padding:10px 14px;border-radius:8px;font:13px/1.4 system-ui,sans-serif;white-space:pre-wrap;max-height:40vh;overflow:auto'; (document.body || document.documentElement).appendChild(d); }
+    d.textContent += (d.textContent ? '\n' : 'Erro (envie este texto ao suporte):\n') + t;
+  }
+  window.addEventListener('error', function (e) { avisoErro((e.message || 'erro') + (e.filename ? ' @ ' + e.filename.split('/').pop() + ':' + e.lineno : '')); });
+  window.addEventListener('unhandledrejection', function (e) { var r = e.reason; avisoErro('Promessa: ' + (r && (r.message || r.code) || JSON.stringify(r))); });
   var ME = null; // {id,email,equipe,socio,nome}
   var readyResolve; var ready = new Promise(function (r) { readyResolve = r; });
 
@@ -84,6 +92,7 @@
     var r = await comPrazo(sb.rpc('meu_acesso'), 15000, 'tempo esgotado ao consultar o acesso');
     if (r.error) throw new Error(r.error.message);
     ME = r.data || { id: s.user.id, email: s.user.email, equipe: false, socio: false };
+    passo('Entrando… (3/3 dados)');
     var el = document.getElementById('pr-login'); if (el) el.remove();
     menuUsuario();
     readyResolve();
