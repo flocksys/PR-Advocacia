@@ -548,7 +548,7 @@ function ultimoAnd(p){var a=(p.andamentos||[]).slice().sort(function(x,y){return
 
 /* ===================== navegação ===================== */
 var ROUTES=[
-  ['painel','Painel'],['grp','Jurídico'],['processos','Processos'],['publicacoes','Publicações'],['atendimentos','Atendimentos'],['agenda','Agenda'],['clientes','Clientes'],['contratos','Contratos'],['documentos','Documentos'],
+  ['painel','Painel'],['grp','Jurídico'],['processos','Processos'],['publicacoes','Publicações'],['atendimentos','Consultivos'],['agenda','Agenda'],['tarefas','Tarefas'],['clientes','Clientes'],['contratos','Contratos'],['documentos','Documentos'],
   ['grp','Financeiro'],['faturas','Faturas'],['cobranca','Cobrança'],['grp','Escritório'],['config','Configurações']
 ];
 var R='painel',V={};
@@ -573,7 +573,7 @@ function render(){
   var html='';
   if(MODE==='loading'){el.innerHTML='<div class="skel">Carregando dados do escritório…</div>';return}
   html+=bannerHTML();
-  html+=({painel:vPainel,processos:vProcessos,publicacoes:vPublicacoes,atendimentos:vAtendimentos,agenda:vAgenda,clientes:vClientes,contratos:vContratos,documentos:vDocumentos,calculos:vCalculos,faturas:vFaturas,cobranca:vCobranca,config:vConfig}[R]||vPainel)();
+  html+=({painel:vPainel,processos:vProcessos,publicacoes:vPublicacoes,atendimentos:vAtendimentos,agenda:vAgenda,tarefas:vTarefas,clientes:vClientes,contratos:vContratos,documentos:vDocumentos,calculos:vCalculos,faturas:vFaturas,cobranca:vCobranca,config:vConfig}[R]||vPainel)();
   el.innerHTML=html;
   if(keep){var k=document.getElementById(keep.id);if(k){k.focus();try{if(keep.s!=null)k.setSelectionRange(keep.s,keep.s)}catch(e){}}}
 }
@@ -705,7 +705,7 @@ function vPainel(){
   h+='<div class="bi-kpis">'+
     kpi('Processos ativos',ativos.length,parados?parados+' sem andamento há +30 dias':'todos com andamento recente','processos',parados?'warnk':'')+
     kpi('Novos processos',novos.length,'no período','processos')+
-    kpi('Atendimentos',atsP.length,ats.filter(function(a){return a.status!=='Concluído'}).length+' em aberto agora','atendimentos')+
+    kpi('Consultivos',atsP.length,ats.filter(function(a){return a.status!=='Concluído'}).length+' em aberto agora','atendimentos')+
     kpi('Faturado',kfmt(fatP),'emitido no período','faturas')+
     kpi('Recebido',kfmt(recP),fatP?Math.round(recP/fatP*100)+'% do faturado':'no período','faturas')+
     kpi('Em atraso',kfmt(vencTot),abTot?Math.round(vencTot/abTot*100)+'% da carteira em aberto':'sem faturas em aberto','cobranca',vencTot?'badk':'')+
@@ -728,7 +728,7 @@ function vPainel(){
   h+='<div class="bi">';
   h+='<section class="tile s8"><div class="th"><h2>Faturado x recebido por mês</h2><div class="lg"><span><i style="background:'+PAL[0]+'"></i>Faturado</span><span><i style="background:'+PAL[1]+'"></i>Recebido</span></div></div>'+colChart(meses,[{name:'Faturado',color:PAL[0],vals:fM},{name:'Recebido',color:PAL[1],vals:rM}])+'</section>';
   h+='<section class="tile s4"><div class="th"><h2>Processos por situação</h2></div>'+donut(sitItems,'sit')+'</section>';
-  h+='<section class="tile s4"><div class="th"><h2>Atendimentos por mês</h2></div>'+lineChart(meses,aM,'atendimentos')+'</section>';
+  h+='<section class="tile s4"><div class="th"><h2>Consultivos por mês</h2></div>'+lineChart(meses,aM,'atendimentos')+'</section>';
   h+='<section class="tile s4"><div class="th"><h2>Demandas por área</h2><small>processos + atendimentos do período</small></div>'+hbars(areaItems,function(v){return v},'area')+'</section>';
   h+='<section class="tile s4"><div class="th"><h2>Carteira em aberto por atraso</h2><a href="#cobranca">Cobrança</a></div>'+hbars(agItems,kfmt)+'</section>';
   h+='<section class="tile s4"><div class="th"><h2>Maiores saldos em aberto</h2><a href="#faturas">Faturas</a></div>'+(cliItems.length?'<div class="hb">'+cliItems.map(function(x){var mx=cliItems[0].v;return '<button class="hb-r" onclick="verCliente(\''+x.id+'\')"><span class="hb-l">'+esc(x.l)+'</span><span class="hb-t"><i style="width:'+(x.v/mx*100).toFixed(1)+'%;background:'+(x.venc?'var(--bad)':PAL[0])+'"></i></span><b class="num">'+kfmt(x.v)+'</b></button>'}).join('')+'</div><div class="note"><i style="background:var(--bad)"></i>com fatura vencida <i style="background:'+PAL[0]+'"></i>em dia</div>':'<div class="empty">Nenhum saldo em aberto.</div>')+'</section>';
@@ -859,36 +859,38 @@ async function addAnd(e,id){e.preventDefault();var p=byId('processos',id);var d=
 async function delAnd(id,i){var p=byId('processos',id);var a=(p.andamentos||[]).slice();a.splice(i,1);try{await patch('processos',id,{andamentos:a});verProcesso(id)}catch(e){}}
 
 /* ----- Atendimentos consultivos ----- */
-var AT_ST=['Aberto','Aguardando cliente','Em elaboração','Concluído'];
-var F_AT=[['data','Data do atendimento','date'],['hora','Hora','time'],['cliente','Cliente','cli',null,1],['assunto','Assunto','text',null,1],['area','Área','select',AREAS],['modalidade','Modalidade','select',['Presencial','Videochamada','Telefone','WhatsApp','E-mail']],
- ['responsavel','Responsável','team'],['status','Status','select',AT_ST],['relato','Relato do cliente','textarea',3,1],['orientacao','Orientação dada / encaminhamento','textarea',3,1],
- ['retorno','Retorno previsto','date',null,0,'Aparece no painel na data marcada'],['entrega','Entrega prevista','select',['Somente orientação','Parecer escrito','Minuta de contrato','Notificação','Ajuizar ação','Outro']],
- ['cobranca','Cobrança','select',['A faturar','Faturado','Cortesia','Incluído em contrato mensal']],['valor','Honorários da consulta (R$)','number']];
+var AT_ST=['Aberto','Aguardando cliente','Em elaboração','Em cartório','Concluído'];
+var SERV_T=['Consulta / orientação','Parecer','Elaboração ou revisão de contrato','Notificação extrajudicial','Negociação / acordo','Inventário extrajudicial','Divórcio extrajudicial','Usucapião extrajudicial','Regularização de imóvel','Assessoria mensal','Outro serviço extrajudicial'];
+var F_AT=[['tipoServico','Tipo de serviço','select',SERV_T],['data','Data de entrada','date'],['cliente','Cliente','cli',null,1],['assunto','Assunto / objeto','text',null,1],['area','Área','select',AREAS],['modalidade','Como chegou','select',['Presencial','Videochamada','Telefone','WhatsApp','E-mail']],
+ ['responsavel','Responsável','team'],['status','Etapa','select',AT_ST],['prazoEntrega','Prazo de entrega','date',null,0,'Data combinada com o cliente'],['retorno','Próximo retorno','date',null,0,'Aparece no painel na data marcada'],
+ ['orgao','Cartório / órgão','text',null,0,'Ex.: 3º Tabelionato de Notas de Curitiba'],['protocolo','Protocolo','text'],['relato','Demanda do cliente','textarea',3,1],['orientacao','Andamento / orientação dada','textarea',3,1],
+['entrega','Entrega prevista','select',['Somente orientação','Parecer escrito','Minuta de contrato','Notificação','Ajuizar ação','Outro']],
+ ['cobranca','Cobrança','select',['A faturar','Faturado','Cortesia','Incluído em contrato mensal']],['valor','Honorários (R$)','number']];
 function vAtendimentos(){
   var st=filterState('at'),q=st.q.toLowerCase();
   var rows=S.atendimentos.filter(function(a){
-    if(st.f.status&&a.status!==st.f.status)return false;if(st.f.resp&&a.responsavel!==st.f.resp)return false;if(st.f.cob&&a.cobranca!==st.f.cob)return false;
+    if(st.f.status&&a.status!==st.f.status)return false;if(st.f.tipo&&a.tipoServico!==st.f.tipo)return false;if(st.f.resp&&a.responsavel!==st.f.resp)return false;if(st.f.cob&&a.cobranca!==st.f.cob)return false;
     if(q&&(txt(a)+' '+nomeCli(a.cliente).toLowerCase()).indexOf(q)<0)return false;return true}).sort(function(a,b){return (a.data||'')<(b.data||'')?1:-1});
   var aFat=S.atendimentos.filter(function(a){return a.cobranca==='A faturar'&&Number(a.valor)>0});
-  var h=ph('Atendimentos consultivos','Consultas, orientações e pareceres fora do contencioso','<button class="btn pri" onclick="formAtendimento()">'+ic('plus')+'Novo atendimento</button>');
-  if(aFat.length)h+='<div class="banner info"><span><b>'+aFat.length+' atendimento'+(aFat.length>1?'s':'')+' a faturar</b>, somando '+money(aFat.reduce(function(s,a){return s+Number(a.valor)},0))+'.</span><button class="btn sm" onclick="setF(\'at\',\'cob\',\'A faturar\')">Ver</button></div>';
+  var h=ph('Consultivos','Consultorias e serviços extrajudiciais','<button class="btn pri" onclick="formAtendimento()">'+ic('plus')+'Novo serviço</button>');
+  if(aFat.length)h+='<div class="banner info"><span><b>'+aFat.length+' serviço'+(aFat.length>1?'s':'')+' a faturar</b>, somando '+money(aFat.reduce(function(s,a){return s+Number(a.valor)},0))+'.</span><button class="btn sm" onclick="setF(\'at\',\'cob\',\'A faturar\')">Ver</button></div>';
   st.view=st.view||'quadro';
-  h+='<div class="toolbar"><div class="seg" role="tablist"><button class="'+(st.view==='quadro'?'on':'')+'" onclick="V.at.view=\'quadro\';render()">Quadro</button><button class="'+(st.view==='lista'?'on':'')+'" onclick="V.at.view=\'lista\';render()">Lista</button></div><input type="search" id="q-at" placeholder="Buscar por cliente, assunto, orientação…" value="'+esc(st.q)+'" oninput="setQ(\'at\',this.value)">'+(st.view==='lista'?sel('Status','at','status',AT_ST):'')+sel('Responsável','at','resp',equipe())+sel('Cobrança','at','cob',['A faturar','Faturado','Cortesia','Incluído em contrato mensal'])+'</div>';
+  h+='<div class="toolbar"><div class="seg" role="tablist"><button class="'+(st.view==='quadro'?'on':'')+'" onclick="V.at.view=\'quadro\';render()">Quadro</button><button class="'+(st.view==='lista'?'on':'')+'" onclick="V.at.view=\'lista\';render()">Lista</button></div><input type="search" id="q-at" placeholder="Buscar por cliente, assunto, orientação…" value="'+esc(st.q)+'" oninput="setQ(\'at\',this.value)">'+sel('Tipo de serviço','at','tipo',SERV_T)+(st.view==='lista'?sel('Etapa','at','status',AT_ST):'')+sel('Responsável','at','resp',equipe())+sel('Cobrança','at','cob',['A faturar','Faturado','Cortesia','Incluído em contrato mensal'])+'</div>';
   if(st.view==='quadro')return h+kanbanAt(st,q);
-  if(!rows.length)return h+'<div class="panel"><div class="empty">'+(S.atendimentos.length?'Nenhum atendimento com esses filtros.':'Nenhum atendimento registrado ainda.')+'</div></div>';
-  h+='<div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Cliente · assunto</th><th>Modalidade</th><th>Status</th><th>Retorno</th><th>Cobrança</th><th class="r">Honorários</th></tr></thead><tbody>'+rows.map(function(a){
-    return '<tr onclick="verAtendimento(\''+a.id+'\')"><td class="num">'+fd(a.data)+'<span class="sub">'+esc(a.hora||'')+'</span></td><td><b>'+esc(nomeCli(a.cliente))+'</b>'+exTag(a)+'<span class="sub">'+esc(a.assunto)+'</span></td><td>'+esc(a.modalidade||'—')+'<span class="sub">'+esc(a.responsavel||'')+'</span></td><td><span class="pill '+({'Aberto':'info','Aguardando cliente':'warn','Em elaboração':'gold','Concluído':'ok'}[a.status]||'')+'">'+esc(a.status)+'</span></td><td>'+(a.retorno&&a.status!=='Concluído'?'<span class="pill '+(a.retorno<today()?'bad':a.retorno===today()?'warn':'')+'">'+fd(a.retorno)+'</span>':'—')+'</td><td>'+esc(a.cobranca||'—')+'</td><td class="r num">'+(a.valor?money(a.valor):'—')+'</td></tr>'}).join('')+'</tbody></table></div></div>';
+  if(!rows.length)return h+'<div class="panel"><div class="empty">'+(S.atendimentos.length?'Nenhum serviço com esses filtros.':'Nenhum serviço consultivo registrado ainda.')+'</div></div>';
+  h+='<div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Entrada</th><th>Cliente · assunto</th><th>Tipo de serviço</th><th>Etapa</th><th>Retorno</th><th>Cobrança</th><th class="r">Honorários</th></tr></thead><tbody>'+rows.map(function(a){
+    return '<tr onclick="verAtendimento(\''+a.id+'\')"><td class="num">'+fd(a.data)+'<span class="sub">'+esc(a.hora||'')+'</span></td><td><b>'+esc(nomeCli(a.cliente))+'</b>'+exTag(a)+'<span class="sub">'+esc(a.assunto)+'</span></td><td>'+esc(a.tipoServico||'Consulta / orientação')+'<span class="sub">'+esc(a.responsavel||'')+'</span></td><td><span class="pill '+({'Aberto':'info','Aguardando cliente':'warn','Em elaboração':'gold','Em cartório':'info','Concluído':'ok'}[a.status]||'')+'">'+esc(a.status)+'</span></td><td>'+(a.retorno&&a.status!=='Concluído'?'<span class="pill '+(a.retorno<today()?'bad':a.retorno===today()?'warn':'')+'">'+fd(a.retorno)+'</span>':'—')+'</td><td>'+esc(a.cobranca||'—')+'</td><td class="r num">'+(a.valor?money(a.valor):'—')+'</td></tr>'}).join('')+'</tbody></table></div></div>';
   return h;
 }
 
 /* quadro kanban de atendimentos */
-var AT_COR={'Aberto':'#2f6fb0','Aguardando cliente':'#d0582a','Em elaboração':'#b98522','Concluído':'#2f9a6a'};
+var AT_COR={'Aberto':'#2f6fb0','Aguardando cliente':'#d0582a','Em elaboração':'#b98522','Em cartório':'#8a5cc2','Concluído':'#2f9a6a'};
 var DRAG=null;
 function kanbanAt(st,q){
   var base=S.atendimentos.filter(function(a){
-    if(st.f.resp&&a.responsavel!==st.f.resp)return false;if(st.f.cob&&a.cobranca!==st.f.cob)return false;
+    if(st.f.tipo&&a.tipoServico!==st.f.tipo)return false;if(st.f.resp&&a.responsavel!==st.f.resp)return false;if(st.f.cob&&a.cobranca!==st.f.cob)return false;
     return !q||(txt(a)+' '+nomeCli(a.cliente).toLowerCase()).indexOf(q)>=0});
-  return '<div class="kanban">'+AT_ST.map(function(col,ci){
+  return '<div class="kanban" style="grid-template-columns:repeat('+AT_ST.length+',minmax(230px,1fr))">'+AT_ST.map(function(col,ci){
     var items=base.filter(function(a){return (a.status||'Aberto')===col});
     if(col==='Concluído')items.sort(function(a,b){return (b.atualizadoEm||'')<(a.atualizadoEm||'')?-1:1});
     else items.sort(function(a,b){var x=a.retorno||'9999',y=b.retorno||'9999';return x<y?-1:x>y?1:((a.data||'')<(b.data||'')?1:-1)});
@@ -899,16 +901,16 @@ function kanbanAt(st,q){
       '<div class="kbody">'+items.map(function(a){return kCard(a,ci)}).join('')+
       (extra?'<button class="kmore" onclick="V.at.view=\'lista\';V.at.f.status=\'Concluído\';render()">+ '+extra+' concluídos na lista</button>':'')+
       (!items.length?'<div class="kempty">Arraste um card para cá</div>':'')+'</div>'+
-      (CAN_WRITE&&col!=='Concluído'?'<button class="kadd" onclick="formAtendimento(null,{data:today(),status:\''+col+'\',modalidade:\'Presencial\',area:\'Cível\',cobranca:\'A faturar\',responsavel:equipe()[0]||\'\'})">'+ic('plus')+'Novo atendimento</button>':'')+
+      (CAN_WRITE&&col!=='Concluído'?'<button class="kadd" onclick="formAtendimento(null,Object.assign(atPreset(),{status:\''+col+'\'}))">'+ic('plus')+'Novo serviço</button>':'')+
     '</section>'}).join('')+'</div>';
 }
 function iniciais(n){return String(n||'').split(' ').filter(function(w){return w.length>2}).slice(0,2).map(function(w){return w[0]}).join('').toUpperCase()||'—'}
 function kCard(a,ci){
   var t=today(),late=a.retorno&&a.status!=='Concluído'&&a.retorno<t,hoje=a.retorno===t&&a.status!=='Concluído';
   return '<article class="kcard'+(late?' late':'')+'" draggable="'+(CAN_WRITE?'true':'false')+'" ondragstart="kStart(event,\''+a.id+'\')" ondragend="kEnd(this)" onclick="verAtendimento(\''+a.id+'\')" tabindex="0" onkeydown="if(event.key===\'Enter\')verAtendimento(\''+a.id+'\')">'+
-    '<div class="kc-top"><span class="pill">'+esc(a.area||'—')+'</span>'+exTag(a)+(a.retorno&&a.status!=='Concluído'?'<span class="pill '+(late?'bad':hoje?'warn':'')+'" title="Retorno previsto">↻ '+(hoje?'hoje':fd(a.retorno).slice(0,5))+'</span>':'')+'</div>'+
-    '<h3>'+esc(a.assunto||'Sem assunto')+'</h3><div class="kc-cli">'+esc(nomeCli(a.cliente))+'</div>'+
-    '<div class="kc-ft"><span class="av" title="'+esc(a.responsavel||'')+'">'+esc(iniciais(a.responsavel))+'</span><span class="kc-meta">'+esc(a.modalidade||'')+' · '+fd(a.data).slice(0,5)+'</span>'+(a.valor?'<b class="num">'+money(a.valor)+'</b>':'')+'</div>'+
+    '<div class="kc-top"><span class="pill">'+esc(a.tipoServico||'Consulta / orientação')+'</span>'+exTag(a)+(a.prazoEntrega&&a.status!=='Concluído'?'<span class="pill '+(a.prazoEntrega<t?'bad':a.prazoEntrega===t?'warn':'gold')+'" title="Prazo de entrega">⏱ '+fd(a.prazoEntrega).slice(0,5)+'</span>':'')+(a.retorno&&a.status!=='Concluído'?'<span class="pill '+(late?'bad':hoje?'warn':'')+'" title="Retorno previsto">↻ '+(hoje?'hoje':fd(a.retorno).slice(0,5))+'</span>':'')+'</div>'+
+    '<h3>'+esc(a.assunto||'Sem assunto')+'</h3><div class="kc-cli">'+esc(nomeCli(a.cliente))+(a.orgao?' · '+esc(a.orgao):'')+'</div>'+
+    '<div class="kc-ft"><span class="av" title="'+esc(a.responsavel||'')+'">'+esc(iniciais(a.responsavel))+'</span><span class="kc-meta">'+esc(a.area||'')+' · '+fd(a.data).slice(0,5)+'</span>'+(a.valor?'<b class="num">'+money(a.valor)+'</b>':'')+'</div>'+
     (CAN_WRITE?'<div class="kc-mv">'+(ci>0?'<button onclick="event.stopPropagation();kMove(\''+a.id+'\','+(ci-1)+')" aria-label="Mover para '+esc(AT_ST[ci-1])+'">‹ '+esc(AT_ST[ci-1])+'</button>':'<span></span>')+(ci<AT_ST.length-1?'<button onclick="event.stopPropagation();kMove(\''+a.id+'\','+(ci+1)+')" aria-label="Mover para '+esc(AT_ST[ci+1])+'">'+esc(AT_ST[ci+1])+' ›</button>':'')+'</div>':'')+
   '</article>';
 }
@@ -918,20 +920,21 @@ function kOver(e,el){if(!DRAG)return;e.preventDefault();el.classList.add('over')
 async function kDrop(e,el){e.preventDefault();el.classList.remove('over');var id=DRAG;DRAG=null;if(!id)return;var st=el.getAttribute('data-st'),a=byId('atendimentos',id);if(!a||a.status===st)return;
   try{await patch('atendimentos',id,{status:st});toast('Movido para '+st)}catch(x){toast('Não foi possível mover')}}
 async function kMove(id,ci){try{await patch('atendimentos',id,{status:AT_ST[ci]});toast('Movido para '+AT_ST[ci])}catch(x){}}
-function formAtendimento(id,preset){openForm('atendimentos','atendimento',F_AT,id,preset||{data:today(),status:'Aberto',modalidade:'Presencial',area:'Cível',cobranca:'A faturar',responsavel:equipe()[0]||''},function(nid){if(nid)verAtendimento(id||nid)})}
+function atPreset(){return {tipoServico:'Consulta / orientação',data:today(),status:'Aberto',modalidade:'Presencial',area:'Cível',cobranca:'A faturar',responsavel:equipe()[0]||''}}
+function formAtendimento(id,preset){openForm('atendimentos','serviço consultivo',F_AT,id,Object.assign(atPreset(),preset||{}),function(nid){if(nid)verAtendimento(id||nid)})}
 function verAtendimento(id){
   var a=byId('atendimentos',id);if(!a)return;
   var fats=S.faturas.filter(function(f){return f.atendimento===id});
   var h='<div class="hd"><div><h2>'+esc(a.assunto||'Atendimento')+'</h2><div style="color:var(--muted);font-size:13px;margin-top:2px">'+esc(nomeCli(a.cliente))+' · '+fd(a.data)+(a.hora?' às '+esc(a.hora):'')+'</div></div><button class="x" onclick="closeModal()" aria-label="Fechar">×</button></div><div class="bd block" style="display:flex;flex-direction:column;gap:16px">';
-  h+='<div class="dl">'+[['Status',a.status],['Modalidade',a.modalidade],['Área',a.area],['Responsável',a.responsavel],['Retorno previsto',a.retorno?fd(a.retorno):''],['Entrega',a.entrega],['Cobrança',a.cobranca],['Honorários',a.valor?money(a.valor):'']].map(function(x){return '<div><span>'+x[0]+'</span><b>'+esc(x[1]||'—')+'</b></div>'}).join('')+'</div>';
-  if(a.relato)h+='<div><h3 style="font-size:15px;margin-bottom:6px">Relato do cliente</h3><div class="msg">'+esc(a.relato)+'</div></div>';
-  if(a.orientacao)h+='<div><h3 style="font-size:15px;margin-bottom:6px">Orientação / encaminhamento</h3><div class="msg">'+esc(a.orientacao)+'</div></div>';
+  h+='<div class="dl">'+[['Tipo de serviço',a.tipoServico||'Consulta / orientação'],['Etapa',a.status],['Área',a.area],['Responsável',a.responsavel],['Prazo de entrega',a.prazoEntrega?fd(a.prazoEntrega):''],['Próximo retorno',a.retorno?fd(a.retorno):''],['Cartório / órgão',a.orgao],['Protocolo',a.protocolo],['Como chegou',a.modalidade],['Entrega',a.entrega],['Cobrança',a.cobranca],['Honorários',a.valor?money(a.valor):'']].map(function(x){return '<div><span>'+x[0]+'</span><b>'+esc(x[1]||'—')+'</b></div>'}).join('')+'</div>';
+  if(a.relato)h+='<div><h3 style="font-size:15px;margin-bottom:6px">Demanda do cliente</h3><div class="msg">'+esc(a.relato)+'</div></div>';
+  if(a.orientacao)h+='<div><h3 style="font-size:15px;margin-bottom:6px">Andamento / orientação</h3><div class="msg">'+esc(a.orientacao)+'</div></div>';
   if(fats.length)h+='<div><h3 style="font-size:15px;margin-bottom:6px">Faturas</h3>'+fatTable(fats)+'</div>';
   h+='</div><div class="ft"><span>'+(CAN_WRITE&&a.status!=='Concluído'?'<button class="btn" onclick="concluirAt(\''+id+'\')">Marcar como concluído</button>':'')+'</span><div class="r">'+(CAN_WRITE?'<button class="btn" onclick="formProcesso(null,{cliente:\''+(a.cliente||'')+'\',objeto:'+esc(JSON.stringify(a.assunto||''))+',area:'+esc(JSON.stringify(a.area||'Cível'))+',situacao:\'A ajuizar\',fase:\'Pré-processual\',responsavel:'+esc(JSON.stringify(a.responsavel||''))+'})">Converter em processo</button><button class="btn" onclick="faturarAt(\''+id+'\')">Gerar fatura</button><button class="btn pri" onclick="formAtendimento(\''+id+'\')">Editar</button>':'')+'</div></div>';
   openModal(h,true);
 }
-async function concluirAt(id){try{await patch('atendimentos',id,{status:'Concluído'});toast('Atendimento concluído');verAtendimento(id)}catch(e){}}
-function faturarAt(id){var a=byId('atendimentos',id);formFatura(null,{cliente:a.cliente,atendimento:id,itens:[{descricao:'Consulta jurídica: '+(a.assunto||''),qtd:1,valor:Number(a.valor)||0}]},function(){if(a.cobranca!=='Faturado')patch('atendimentos',id,{cobranca:'Faturado'}).catch(function(){})})}
+async function concluirAt(id){try{await patch('atendimentos',id,{status:'Concluído'});toast('Serviço concluído');verAtendimento(id)}catch(e){}}
+function faturarAt(id){var a=byId('atendimentos',id);formFatura(null,{cliente:a.cliente,atendimento:id,itens:[{descricao:(a.tipoServico&&a.tipoServico!=='Consulta / orientação'?a.tipoServico:'Consulta jurídica')+': '+(a.assunto||''),qtd:1,valor:Number(a.valor)||0}]},function(){if(a.cobranca!=='Faturado')patch('atendimentos',id,{cobranca:'Faturado'}).catch(function(){})})}
 
 /* ----- Agenda ----- */
 var AG_T=['Audiência','Prazo','Reunião','Tarefa'];
@@ -1746,7 +1749,7 @@ function vset(k,prop,val){return function(){var st=filterState(k);if(prop.indexO
 var NAVSUB={
  processos:[['Todos os processos',vset('proc','tab','todos')],['Parados há +30 dias',vset('proc','tab','parados')],['A ajuizar',vset('proc','tab','ajuizar')],['-'],['Novo processo',null,'formProcesso()'],['Cadastrar por IA',null,'procIA()'],['Importar autos (PDF)',null,'procAutos()'],['Importar em lote',null,'procLote()'],['Exportar planilha',null,'procCSV()']],
  publicacoes:[['Publicações',vset('atos','tab','pub')],['Intimações eletrônicas',vset('atos','tab','int')],['Movimentações',vset('atos','tab','mov')],['-'],['Registrar publicação',vset('atos','tab','pub'),'formPub()'],['Registrar intimação',vset('atos','tab','int'),'formInt()'],['Registrar movimentação',vset('atos','tab','mov'),'formMov()']],
- atendimentos:[['Quadro (Kanban)',vset('at','view','quadro')],['Lista',vset('at','view','lista')],['A faturar',function(){var st=filterState('at');st.view='lista';st.f.cob='A faturar'}],['-'],['Novo atendimento',null,'formAtendimento()']],
+ atendimentos:[['Quadro (Kanban)',vset('at','view','quadro')],['Lista',vset('at','view','lista')],['A faturar',function(){var st=filterState('at');st.view='lista';st.f.cob='A faturar'}],['-'],['Novo serviço',null,'formAtendimento()']],
  agenda:[['Próximos',vset('ag','view','lista')],['Calendário',vset('ag','view','mes')],['Tabela',vset('ag','view','tabela')],['Quadro de tarefas',vset('ag','view','kanban')],['Concluídos',vset('ag','view','feitos')],['-'],['Atendimentos',vset('ag','f.tipo','Atendimento')],['Audiências',vset('ag','f.tipo','Audiência')],['Prazos processuais',vset('ag','f.tipo','Prazo')],['Reuniões',vset('ag','f.tipo','Reunião')],['Compromissos',vset('ag','f.tipo','Compromisso')],['Tarefas',vset('ag','f.tipo','Tarefa')],['Todos os tipos',vset('ag','f.tipo','')],['-'],['Novo compromisso',null,'formAgenda()']],
  clientes:[['Clientes',vset('cli','tab','Cliente')],['Partes contrárias',vset('cli','tab','Parte contrária')],['Fornecedores',vset('cli','tab','Fornecedor')],['Outros',vset('cli','tab','Outros')],['Todos',vset('cli','tab','todos')],['Portal do cliente',vset('cli','tab','portal')],['-'],['Nova pessoa',null,'formCliente()']],
  contratos:[['Ver contratos',null],['Novo contrato',null,'formContrato()']],
@@ -1943,7 +1946,7 @@ if(!ICON.del)ICON.del='<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11
 function askDelPessoa(id){
   var c=byId('clientes',id);if(!c)return;
   var n={p:S.processos.filter(function(x){return x.cliente===id}).length,f:S.faturas.filter(function(x){return x.cliente===id}).length,a:S.atendimentos.filter(function(x){return x.cliente===id}).length,k:S.contratos.filter(function(x){return x.cliente===id}).length};
-  var lig=[[n.p,'processo','processos'],[n.a,'atendimento','atendimentos'],[n.k,'contrato','contratos'],[n.f,'fatura','faturas']].filter(function(x){return x[0]}).map(function(x){return x[0]+' '+(x[0]===1?x[1]:x[2])});
+  var lig=[[n.p,'processo','processos'],[n.a,'serviço consultivo','serviços consultivos'],[n.k,'contrato','contratos'],[n.f,'fatura','faturas']].filter(function(x){return x[0]}).map(function(x){return x[0]+' '+(x[0]===1?x[1]:x[2])});
   document.getElementById('delzone').innerHTML='<span class="confirm">'+(lig.length?'Há '+lig.join(', ')+(n.p+n.a+n.k+n.f===1?' ligado':' ligados')+' a esta pessoa'+(n.p+n.a+n.k+n.f===1?', que ficará':', que ficarão')+' sem cadastro vinculado. ':'')+'Excluir definitivamente? <button type="button" class="btn sm danger" onclick="delPessoa(\''+id+'\')">Sim, excluir</button><button type="button" class="btn sm" onclick="verCliente(\''+id+'\')">Não</button></span>';
 }
 async function delPessoa(id){try{await removeDoc('clientes',id);closeModal();toast('Cadastro excluído')}catch(e){toast('Não foi possível excluir')}}
@@ -2454,7 +2457,7 @@ function fatDocHTML(f){
 }
 
 /* ordem das abas pedida pelo escritório */
-(function(){var o=['painel','agenda','clientes','atendimentos','processos','publicacoes','calculos','contratos','faturas','cobranca','documentos','config'];
+(function(){var o=['painel','agenda','tarefas','clientes','atendimentos','processos','publicacoes','calculos','contratos','faturas','cobranca','documentos','config'];
   var r=ROUTES.filter(function(x){return x[0]!=='grp'}).sort(function(a,b){var i=o.indexOf(a[0]),j=o.indexOf(b[0]);return (i<0?99:i)-(j<0?99:j)});ROUTES.length=0;r.forEach(function(x){ROUTES.push(x)})})();
 
 /* submenus (passar o mouse) para as abas novas */
@@ -2581,6 +2584,27 @@ function novaTarefaPrazo(id){var pz=byId('agenda',id);if(!pz)return;var d=addDay
   if(o&&o.prazoVinc&&S.agenda.indexOf(o)>=0){var pz=byId('agenda',o.prazoVinc);if(pz)h+=' <span class="pill" style="font-size:11px" title="Tarefa do prazo '+esc(prazoLabel(pz))+'">↳ prazo '+fd(pz.data)+'</span>'}
   else if(o&&o.tipo==='Prazo'&&S.agenda.indexOf(o)>=0){var ts=tarefasDoPrazo(o.id);if(ts.length){var f=ts.filter(function(t){return t.status==='Concluído'}).length;h+=' <span class="pill'+(f<ts.length?' warn':' ok')+'" style="font-size:11px" title="Tarefas deste prazo">'+f+'/'+ts.length+' tarefas</span>'}}
   }catch(e){}return h}})();
+
+/* ===== Aba Tarefas (quadro kanban das tarefas da agenda) ===== */
+ICON.tarefas='<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8l1.5 1.5L12 7M8 14l1.5 1.5L12 13M14 8h3M14 14h3"/>';
+ICON.atendimentos='<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/>';
+function vTarefas(){
+  var st=filterState('tar');st.view=st.view||'quadro';var q=(st.q||'').toLowerCase(),t=today();
+  var T=S.agenda.filter(function(a){return a.tipo==='Tarefa'&&a.status!=='Cancelado'});
+  var list=T.filter(function(a){return (!st.f.resp||a.responsavel===st.f.resp)&&(!st.f.pri||(a.prioridade||'Normal')===st.f.pri)&&(!q||(txt(a)+' '+(a.processo?procLabel(a.processo):'')+' '+(a.cliente?nomeCli(a.cliente):'')).toLowerCase().indexOf(q)>=0)});
+  var ab=T.filter(agAberto);
+  var h=ph('Tarefas','Quadro de tarefas do escritório','<button class="btn pri" onclick="formAgenda(null,{tipo:\'Tarefa\',coluna:\'A fazer\'})">'+ic('plus')+'Nova tarefa</button>');
+  h+='<div class="kpis k4">'+kpiBox('A fazer',ab.filter(function(a){return colTar(a)==='A fazer'}).length,'pendentes')+kpiBox('Em andamento',ab.filter(function(a){var c=colTar(a);return c==='Em andamento'||c==='Revisão'}).length,'em andamento ou revisão')+
+    kpiBox('Vencidas',ab.filter(function(a){return a.data<t}).length,'data já passou',ab.some(function(a){return a.data<t})?'alert':'')+kpiBox('Concluídas',T.filter(function(a){return a.status==='Concluído'}).length,'no total')+'</div>';
+  h+='<div class="toolbar"><div class="seg">'+[['quadro','Quadro'],['lista','Lista']].map(function(v){return '<button class="'+(st.view===v[0]?'on':'')+'" onclick="V.tar.view=\''+v[0]+'\';render()">'+v[1]+'</button>'}).join('')+'</div><input type="search" id="q-tar" placeholder="Buscar tarefa, processo ou cliente…" value="'+esc(st.q||'')+'" oninput="setQ(\'tar\',this.value)">'+sel('Responsável','tar','resp',equipe())+sel('Prioridade','tar','pri',AG_PRI)+'</div>';
+  if(st.view==='quadro')return h+kanbanTar(list);
+  var rows=list.filter(agAberto).sort(sortAg);
+  if(!rows.length)return h+'<div class="panel"><div class="empty">Nenhuma tarefa pendente.</div></div>';
+  return h+'<div class="panel"><div class="bd flush rows">'+rows.map(rowAgenda).join('')+'</div></div>';
+}
+NAVSUB.tarefas=[['Quadro',vset('tar','view','quadro')],['Lista',vset('tar','view','lista')],['-'],['Nova tarefa',null,"formAgenda(null,{tipo:'Tarefa',coluna:'A fazer'})"]];
+(function(){var _bn=buildNav;buildNav=function(){var r=_bn.apply(this,arguments);try{var t=today(),n=S.agenda.filter(function(a){return a.tipo==='Tarefa'&&agAberto(a)&&a.data<=t}).length;
+  var l=document.querySelector('#nav a[href="#tarefas"]');if(l&&n&&!l.querySelector('.ct'))l.insertAdjacentHTML('beforeend','<span class="ct">'+n+'</span>')}catch(e){}return r}})();
 
 boot();
 </script>
