@@ -2,7 +2,9 @@
    Implementa window.claude.use('db'|'user'|'assets'|'downloads'|'sample') e a tela de login. */
 (function () {
   var cfg = window.PR_CONFIG;
-  var sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true } });
+  var sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true,
+    // Sem trava entre abas: a trava padrão pode ficar presa quando há mais de uma aba aberta
+    lock: function (name, timeout, fn) { return fn(); } } });
   window.SB = sb;
   var ME = null; // {id,email,equipe,socio,nome}
   var readyResolve; var ready = new Promise(function (r) { readyResolve = r; });
@@ -54,6 +56,7 @@
         if (!r.error) { modo = 'entrar'; location.hash = ''; return iniciar(); }
       }
       if (r && r.error) return telaLogin(traduz(r.error.message));
+      telaLogin('Entrando…', true);
       iniciar();
     } catch (e) { telaLogin('Não foi possível conectar. Tente de novo.'); }
   }
@@ -66,10 +69,17 @@
   }
   sb.auth.onAuthStateChange(function (ev) { if (ev === 'PASSWORD_RECOVERY') { modo = 'nova'; telaLogin(); } });
 
+  function comPrazo(p, ms, msg) { return Promise.race([p, new Promise(function (_, rej) { setTimeout(function () { rej(new Error(msg)); }, ms); })]); }
   async function iniciar() {
-    var s = (await sb.auth.getSession()).data.session;
+    try { await iniciar2(); }
+    catch (e) { console.error(e); telaLogin('Não foi possível abrir o sistema: ' + (e && e.message || e) + '. Recarregue a página.'); }
+  }
+  async function iniciar2() {
+    var s = (await comPrazo(sb.auth.getSession(), 15000, 'tempo esgotado ao ler a sessão')).data.session;
     if (!s || modo === 'nova') return telaLogin();
-    var r = await sb.rpc('meu_acesso');
+    if (location.hash.indexOf('access_token') >= 0) history.replaceState(null, '', location.pathname);
+    var r = await comPrazo(sb.rpc('meu_acesso'), 15000, 'tempo esgotado ao consultar o acesso');
+    if (r.error) throw new Error(r.error.message);
     ME = r.data || { id: s.user.id, email: s.user.email, equipe: false, socio: false };
     var el = document.getElementById('pr-login'); if (el) el.remove();
     menuUsuario();

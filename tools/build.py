@@ -1,6 +1,6 @@
 """Gera public/index.html a partir de src/app.html (a interface do sistema).
 Uso: python3 tools/build.py"""
-import pathlib, re
+import pathlib, re, hashlib
 
 raiz = pathlib.Path(__file__).resolve().parent.parent
 app = (raiz / 'src' / 'app.html').read_text(encoding='utf-8')
@@ -26,6 +26,9 @@ titulo = m.group(1) if m else 'Pontes Rodrigues'
 if m:
     app = app[m.end():]
 
+def ver(nome):
+    return hashlib.sha1((raiz / 'public' / nome).read_bytes()).hexdigest()[:8]
+
 html = f'''<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -34,8 +37,8 @@ html = f'''<!doctype html>
 <title>{titulo}</title>
 <meta name="robots" content="noindex">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="/config.js"></script>
-<script src="/shim.js"></script>
+<script src="/config.js?v={ver('config.js')}"></script>
+<script src="/shim.js?v={ver('shim.js')}"></script>
 </head>
 <body>
 {app}
