@@ -2481,6 +2481,56 @@ optsProc=function(cli){return S.processos.filter(function(p){return !cli||p.clie
 (function(){var _vp=verProcesso;verProcesso=function(id){var r=_vp.apply(this,arguments);try{var p=byId('processos',id),sx=procSufixo(p),h=document.querySelector('#dlg .hd h2');
   if(sx&&h&&!h.querySelector('.pr-sx'))h.insertAdjacentHTML('beforeend',' <span class="pill pr-sx" style="font-size:12px;vertical-align:middle">'+esc(sx)+'</span>')}catch(e){}return r}})();
 
+/* ===== Processos vinculados: vincular existentes e visão unificada do caso ===== */
+['Apenso / conexo','Processo relacionado'].forEach(function(t){if(TIPOS_VINC.indexOf(t)<0)TIPOS_VINC.splice(1,0,t)});
+function raizDe(id){var p=byId('processos',id),vis={};while(p&&p.principal&&!vis[p.id]){vis[p.id]=1;var pai=byId('processos',p.principal);if(!pai)break;p=pai}return p}
+function grupoDe(id){var r=raizDe(id);if(!r)return [];var out=[r],fila=[r.id],vis={};vis[r.id]=1;
+  while(fila.length){var x=fila.shift();S.processos.forEach(function(p){if(p.principal===x&&!vis[p.id]){vis[p.id]=1;out.push(p);fila.push(p.id)}})}return out}
+function rotCaso(p,raiz){return p.id===raiz.id?'Principal':(p.tipoVinculo||'Vinculado')}
+function casoItens(grupo){var raiz=grupo[0],it=[];
+  grupo.forEach(function(p){var tag=rotCaso(p,raiz),dg=digits(p.numero);
+    (p.andamentos||[]).forEach(function(a){it.push({d:a.data,t:a.descricao||a.texto||'',k:'Andamento',p:p,tag:tag})});
+    if(dg.length===20)S.publicacoes.forEach(function(x){if(digits(x.numero)===dg)it.push({d:x.disponibilizacao,t:(x.tipo||'Publicação')+': '+String(x.texto||'').slice(0,180),k:'Publicação',p:p,tag:tag})});
+    (S.intimacoes||[]).forEach(function(x){if(x.processo===p.id)it.push({d:x.recebida,t:(x.tipo||'Intimação')+(x.obs?': '+x.obs:''),k:'Intimação',p:p,tag:tag})});
+    S.agenda.forEach(function(a){if(a.processo===p.id)it.push({d:a.data,t:(a.tipo||'Compromisso')+': '+(a.titulo||'')+(a.status==='Concluído'?' ✓':''),k:'Agenda',p:p,tag:tag,on:"closeModal();formAgenda('"+a.id+"')"})});
+    S.documentos.forEach(function(x){if(x.processo===p.id)it.push({d:x.data||String(x.criadoEm||'').slice(0,10),t:(x.tipo||'Documento')+': '+(x.nome||''),k:'Documento',p:p,tag:tag,on:"closeModal();formDoc('"+x.id+"')"})});
+    S.faturas.forEach(function(x){if(x.processo===p.id)it.push({d:x.emissao,t:'Fatura '+(x.numero||'')+' · '+money(fatTotal(x))+' · '+fatStatus(x),k:'Fatura',p:p,tag:tag,on:"closeModal();verFatura('"+x.id+"')"})});
+    (S.calculos||[]).forEach(function(x){if(x.processo===p.id)it.push({d:String(x.atualizadoEm||'').slice(0,10),t:(x.titulo||'Cálculo')+' · '+money(calcular(x).total),k:'Cálculo',p:p,tag:tag,on:"closeModal();formCalculo('"+x.id+"')"})});
+  });
+  return it.filter(function(x){return x.d}).sort(function(a,b){return a.d<b.d?1:a.d>b.d?-1:0});
+}
+var CASO_F='';
+function casoHTML(id){var g=grupoDe(id);if(g.length<2)return '';var raiz=g[0],it=casoItens(g);
+  var kinds=['Andamento','Publicação','Intimação','Agenda','Documento','Fatura','Cálculo'].filter(function(k){return it.some(function(x){return x.k===k})});
+  var lista=it.filter(function(x){return !CASO_F||x.k===CASO_F});
+  return '<div id="caso-uni"><h3 style="font-size:16px;margin-bottom:6px">Caso completo · '+g.length+' processos vinculados</h3>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+g.map(function(p){return '<button type="button" class="chip" onclick="verProcesso(\''+p.id+'\')"'+(p.id===id?' style="background:var(--gold-soft);font-weight:700"':'')+'>'+esc(rotCaso(p,raiz))+' · <span class="mono">'+esc(p.numero||'sem número')+'</span></button>'}).join('')+'</div>'+
+    '<div class="tabs" style="margin-bottom:6px"><button class="'+(!CASO_F?'on':'')+'" onclick="CASO_F=\'\';casoRe(\''+id+'\')">Tudo ('+it.length+')</button>'+kinds.map(function(k){var n=it.filter(function(x){return x.k===k}).length;return '<button class="'+(CASO_F===k?'on':'')+'" onclick="CASO_F=\''+k+'\';casoRe(\''+id+'\')">'+k+' ('+n+')</button>'}).join('')+'</div>'+
+    (lista.length?'<div class="timeline">'+lista.slice(0,80).map(function(x){return '<div class="tl"'+(x.on?' style="cursor:pointer" onclick="'+x.on+'"':'')+'><span class="dt num">'+fd(x.d)+'</span><span><span class="pill'+(x.tag==='Principal'?'':' info')+'" style="font-size:11px">'+esc(x.tag)+'</span> <b style="font-weight:600">'+esc(x.k)+'</b> · '+esc(x.t)+'</span><span></span></div>'}).join('')+'</div>'+(lista.length>80?'<div class="hint">Mostrando os 80 mais recentes.</div>':''):'<div class="hint">Nada registrado ainda.</div>')+'</div>';
+}
+function casoRe(id){var el=document.getElementById('caso-uni');if(el)el.outerHTML=casoHTML(id)}
+function vincExistente(id){
+  var g=grupoDe(id),ja={};g.forEach(function(p){ja[p.id]=1});
+  var ops=S.processos.filter(function(p){return !ja[p.id]}).sort(function(a,b){return String(a.numero).localeCompare(String(b.numero))});
+  openModal('<div class="hd"><h2>Vincular processo existente</h2><button class="x" onclick="closeModal()" aria-label="Fechar">×</button></div><div class="bd block" style="display:flex;flex-direction:column;gap:12px">'+
+    '<div class="hint">O processo escolhido passa a ficar vinculado a <b class="mono">'+esc(procLabel(id))+'</b>. Os dados de cada processo continuam separados, e a ficha de qualquer um deles mostra o caso completo.</div>'+
+    '<div class="f"><label for="vx-q">Buscar processo</label><input id="vx-q" placeholder="Número, cliente ou parte contrária" oninput="vincFiltrar()"></div>'+
+    '<div class="f"><label for="vx-p">Processo</label><select id="vx-p" size="7" style="height:auto">'+ops.map(function(p){return '<option value="'+p.id+'" data-t="'+esc(semAcento([p.numero,nomeCli(p.cliente),p.parteContraria,p.objeto].join(' ')))+'">'+esc((p.numero||'Sem número')+' · '+nomeCli(p.cliente)+(p.parteContraria?' × '+p.parteContraria:''))+'</option>'}).join('')+'</select></div>'+
+    '<div class="f"><label for="vx-t">Tipo de vínculo</label><select id="vx-t">'+TIPOS_VINC.filter(Boolean).map(function(t){return '<option'+(t==='Apenso / conexo'?' selected':'')+'>'+esc(t)+'</option>'}).join('')+'</select></div>'+
+    '</div><div class="ft"><span></span><div class="r"><button class="btn" onclick="verProcesso(\''+id+'\')">Voltar</button><button class="btn pri" onclick="vincSalvar(\''+id+'\')">Vincular</button></div></div>');
+}
+function vincFiltrar(){var q=semAcento(document.getElementById('vx-q').value);document.querySelectorAll('#vx-p option').forEach(function(o){o.hidden=q&&o.getAttribute('data-t').indexOf(q)<0})}
+async function vincSalvar(id){var pid=document.getElementById('vx-p').value,t=document.getElementById('vx-t').value;if(!pid){toast('Escolha o processo');return}
+  try{var rz=raizDe(id)||{id:id};await patch('processos',pid,{principal:rz.id,tipoVinculo:t});toast('Processo vinculado');setTimeout(function(){verProcesso(id)},300)}catch(e){toast('Não foi possível vincular')}}
+async function desvincular(pid,volta){if(!confirm('Desvincular este processo? Os dados dele continuam no cadastro.'))return;try{await patch('processos',pid,{principal:'',tipoVinculo:''});toast('Processo desvinculado');setTimeout(function(){verProcesso(volta)},300)}catch(e){}}
+(function(){var _vp=verProcesso;verProcesso=function(id){var r=_vp.apply(this,arguments);
+  try{var bd=document.querySelector('#dlg .bd.block');if(!bd)return r;var p=byId('processos',id);
+    var ch=bd.querySelector('.pchips');if(ch&&CAN_WRITE&&!ch.querySelector('#btn-vinc'))ch.insertAdjacentHTML('beforeend','<button class="chip" id="btn-vinc" onclick="vincExistente(\''+id+'\')">+ Vincular processo existente</button>');
+    if(p&&p.principal&&CAN_WRITE){var b=bd.querySelector('.banner.info');if(b&&!b.querySelector('.desv'))b.insertAdjacentHTML('beforeend','<button class="btn sm desv" style="margin-left:auto" onclick="desvincular(\''+id+'\',\''+p.principal+'\')">Desvincular</button>')}
+    CASO_F='';var html=casoHTML(id);if(html){var alvo=bd.querySelector('.pchips');(alvo||bd.firstElementChild).insertAdjacentHTML('afterend',html)}
+  }catch(e){console.warn(e)}
+  return r}})();
+
 boot();
 </script>
 
