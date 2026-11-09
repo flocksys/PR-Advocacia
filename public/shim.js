@@ -2,6 +2,21 @@
    Implementa window.claude.use('db'|'user'|'assets'|'downloads'|'sample') e a tela de login. */
 (function () {
   var cfg = window.PR_CONFIG;
+  // Apaga a sessão e os dados guardados por este site no navegador (resolve travas de sessão antiga)
+  function limparLocal() {
+    [localStorage, sessionStorage].forEach(function (st) { try { Object.keys(st).forEach(function (k) { if (/^sb-|supabase|^prg-/.test(k)) st.removeItem(k); }); } catch (e) {} });
+    try { if (navigator.serviceWorker) navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.unregister(); }); }); } catch (e) {}
+    try { if (window.caches) caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); }); } catch (e) {}
+  }
+  window.PR_limpar = function () { limparLocal(); try { sessionStorage.setItem('pr-limpou', '1'); } catch (e) {} setTimeout(function () { location.replace(location.pathname); }, 300); };
+  if (/[?&]limpar\b/.test(location.search)) { limparLocal(); history.replaceState(null, '', location.pathname); }
+  if (!window.supabase) {
+    document.addEventListener('DOMContentLoaded', function () {
+      document.body.innerHTML = '<div style="max-width:520px;margin:12vh auto;padding:24px;font:15px/1.5 system-ui,sans-serif;color:#333">' +
+        '<h2 style="margin:0 0 8px">Não foi possível carregar o sistema</h2><p>O navegador não baixou um componente necessário (cdn.jsdelivr.net). Normalmente é um bloqueador de anúncios, antivírus ou VPN. Desative a extensão para este site ou adicione-o como exceção e recarregue a página.</p></div>';
+    });
+    return;
+  }
   var sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true,
     // Sem trava entre abas: a trava padrão pode ficar presa quando há mais de uma aba aberta
     lock: function (name, timeout, fn) { return fn(); } } });
@@ -43,7 +58,8 @@
       (modo !== 'esqueci' ? '<label for="pr-s">Senha</label><input id="pr-s" type="password" minlength="8" autocomplete="' + (modo === 'entrar' ? 'current-password' : 'new-password') + '" required>' : '') +
       '<button type="submit">' + (modo === 'esqueci' ? 'Enviar link' : t[0]) + '</button>' +
       '<div class="lk">' + (modo === 'entrar' ? '<a data-m="criar">Criar acesso</a><a data-m="esqueci">Esqueci a senha</a>' : (modo !== 'nova' ? '<a data-m="entrar">Voltar para entrar</a>' : '')) + '</div>' +
-      '<div class="pr-msg' + (ok ? ' ok' : '') + '">' + (msg || '') + '</div></form>';
+      '<div class="pr-msg' + (ok ? ' ok' : '') + '">' + (msg || '') + '</div>' +
+      (modo === 'entrar' ? '<div class="lk" style="margin-top:6px"><a onclick="PR_limpar()" style="font-size:12px;opacity:.75">Não está entrando? Limpar dados deste navegador</a></div>' : '') + '</form>';
     el.querySelectorAll('a[data-m]').forEach(function (a) { a.onclick = function () { modo = a.getAttribute('data-m'); telaLogin(); }; });
     document.getElementById('pr-f').onsubmit = enviar;
   }
@@ -80,21 +96,28 @@
   function comPrazo(p, ms, msg) { return Promise.race([p, new Promise(function (_, rej) { setTimeout(function () { rej(new Error(msg)); }, ms); })]); }
   async function iniciar() {
     try { await iniciar2(); }
-    catch (e) { console.error(e); telaLogin('Não foi possível abrir o sistema: ' + (e && e.message || e) + '. Recarregue a página.'); }
+    catch (e) {
+      console.error(e);
+      var ja = false; try { ja = sessionStorage.getItem('pr-limpou') === '1'; } catch (x) {}
+      if (!ja) return window.PR_limpar(); // primeira falha: limpa a sessão antiga e tenta de novo sozinho
+      try { sessionStorage.removeItem('pr-limpou'); } catch (x) {}
+      telaLogin('Não foi possível abrir o sistema: ' + (e && e.message || e) + '. Se continuar, desative extensões (bloqueador de anúncios, antivírus, VPN) para este site.');
+    }
   }
   function passo(t) { var m = document.querySelector('#pr-login .pr-msg'); if (m) { m.className = 'pr-msg ok'; m.textContent = t; } }
   async function iniciar2() {
     passo('Entrando… (1/3 sessão)');
-    var s = (await comPrazo(sb.auth.getSession(), 15000, 'tempo esgotado ao ler a sessão')).data.session;
+    var s = (await comPrazo(sb.auth.getSession(), 8000, 'tempo esgotado ao ler a sessão')).data.session;
     if (!s || modo === 'nova') return telaLogin();
     if (location.hash.indexOf('access_token') >= 0) history.replaceState(null, '', location.pathname);
     passo('Entrando… (2/3 acesso)');
-    var r = await comPrazo(sb.rpc('meu_acesso'), 15000, 'tempo esgotado ao consultar o acesso');
+    var r = await comPrazo(sb.rpc('meu_acesso'), 12000, 'tempo esgotado ao consultar o acesso');
     if (r.error) throw new Error(r.error.message);
     ME = r.data || { id: s.user.id, email: s.user.email, equipe: false, socio: false };
     passo('Entrando… (3/3 dados)');
     var el = document.getElementById('pr-login'); if (el) el.remove();
     menuUsuario();
+    try { sessionStorage.removeItem('pr-limpou'); } catch (x) {}
     readyResolve();
   }
   function menuUsuario() {
