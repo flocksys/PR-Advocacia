@@ -561,7 +561,7 @@ function render(){
   var html='';
   if(MODE==='loading'){el.innerHTML='<div class="skel">Carregando dados do escritório…</div>';return}
   html+=bannerHTML();
-  html+=({painel:vPainel,processos:vProcessos,publicacoes:vPublicacoes,atendimentos:vAtendimentos,agenda:vAgenda,clientes:vClientes,contratos:vContratos,documentos:vDocumentos,faturas:vFaturas,cobranca:vCobranca,config:vConfig}[R]||vPainel)();
+  html+=({painel:vPainel,processos:vProcessos,publicacoes:vPublicacoes,atendimentos:vAtendimentos,agenda:vAgenda,clientes:vClientes,contratos:vContratos,documentos:vDocumentos,calculos:vCalculos,faturas:vFaturas,cobranca:vCobranca,config:vConfig}[R]||vPainel)();
   el.innerHTML=html;
   if(keep){var k=document.getElementById(keep.id);if(k){k.focus();try{if(keep.s!=null)k.setSelectionRange(keep.s,keep.s)}catch(e){}}}
 }
@@ -2199,6 +2199,147 @@ async function autosPreencher(){
   });
   toast(notas.length?notas.join('. ')+'. Confira e salve.':'Dados preenchidos: confira e salve');
 }
+
+/* ===== Cálculos: atualização de débitos (correção monetária, juros, multa, honorários, art. 523 CPC) ===== */
+COLS.push('indices','calculos');S.indices=[];S.calculos=[];
+ROUTES.splice(ROUTES.findIndex(function(r){return r[0]==='documentos'})+1,0,['calculos','Cálculos']);
+ICON.calculos='<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 18h2M12 18h2M16 15v3"/>';
+var IDX_NOMES={ipca:'IPCA',inpc:'INPC',igpm:'IGP-M',igpdi:'IGP-DI',ipcae:'IPCA-E',selic:'SELIC',media_inpc_igpdi:'Média INPC/IGP-DI',nenhum:'Sem correção'};
+var JUROS_T={nenhum:'Sem juros',um:'1% ao mês (simples)',meio:'0,5% ao mês (simples)',legal:'Taxa legal (SELIC − IPCA, art. 406 CC)',cc:'Regra do Código Civil: 1% a.m. até 08/2024, depois taxa legal'};
+function idxMes(chave,ym){var d=S.indices.find(function(x){return x.id===chave});if(!d||!d.valores)return null;var v=d.valores[ym];return v==null?null:Number(v)}
+function ymAdd(ym,n){var a=+ym.slice(0,4),m=+ym.slice(5,7)-1+n;a+=Math.floor(m/12);m=((m%12)+12)%12;return a+'-'+('0'+(m+1)).slice(-2)}
+function ymDe(iso){return String(iso).slice(0,7)}
+function diasNoMes(ym){return new Date(+ym.slice(0,4),+ym.slice(5,7),0).getDate()}
+function dt(iso){return new Date(iso+'T12:00:00')}
+// variação (%) do índice de correção num mês, conforme a regra escolhida
+function corrMes(regra,ym,falt){
+  var ch=regra.indice;
+  if(regra.lei14905&&ym>='2024-09')ch='ipca';
+  if(ch==='nenhum')return 0;
+  if(ch==='media_inpc_igpdi'){var a=idxMes('inpc',ym),b=idxMes('igpdi',ym);if(a==null||b==null){falt[ym+' '+ch]=1;return 0}return (a+b)/2}
+  var v=idxMes(ch,ym);if(v==null){falt[ym+' '+IDX_NOMES[ch]]=1;return 0}return v;
+}
+function jurosMes(regra,ym,falt){
+  var t=regra.juros;
+  if(t==='nenhum')return 0;if(t==='um')return 1;if(t==='meio')return 0.5;
+  if(t==='cc'&&ym<'2024-09')return 1;
+  var s=idxMes('selic',ym),i=idxMes('ipca',ym);if(s==null||i==null){falt[ym+' SELIC/IPCA']=1;return 0}
+  return Math.max(0,s-i);
+}
+function calcular(c){
+  var falt={},fim=c.dataFinal||today(),ymFim=ymDe(fim),reg={indice:c.indice||'inpc',juros:c.juros||'um',lei14905:!!c.lei14905};
+  var linhas=(c.parcelas||[]).filter(function(p){return p.data&&Number(p.valor)}).map(function(p){
+    var v=Number(p.valor),fator=1,ym=ymDe(p.data);
+    if(reg.indice!=='selic'||true){for(var m=ym;m<ymFim;m=ymAdd(m,1)){fator*=1+corrMes(reg,m,falt)/100}}
+    var corrigido=v*fator;
+    // juros: do termo inicial (vencimento ou citação) até a data final, proporcional aos dias de cada mês
+    var ini=(c.jurosDesde==='citacao'&&c.citacao&&c.citacao>p.data)?c.citacao:p.data,pj=0;
+    if(ini<fim){for(var mm=ymDe(ini);mm<=ymFim;mm=ymAdd(mm,1)){
+      var d0=mm===ymDe(ini)?+ini.slice(8,10)-1:0,d1=mm===ymFim?+fim.slice(8,10)-1:diasNoMes(mm),w=Math.max(0,d1-d0)/diasNoMes(mm);
+      if(w>0)pj+=jurosMes(reg,mm,falt)*w}}
+    var juros=corrigido*pj/100;
+    return {desc:p.desc||'',data:p.data,valor:v,fator:fator,corrigido:corrigido,correcao:corrigido-v,jurosPct:pj,juros:juros,jurosDesde:ini,total:corrigido+juros};
+  });
+  var soma=function(k){return linhas.reduce(function(a,l){return a+l[k]},0)};
+  var r={linhas:linhas,principal:soma('valor'),correcao:soma('correcao'),corrigido:soma('corrigido'),juros:soma('juros')};
+  r.multa=r.corrigido*(Number(c.multaPct)||0)/100;
+  r.subtotal=r.corrigido+r.juros+r.multa;
+  r.honorarios=r.subtotal*(Number(c.honorariosPct)||0)/100;
+  r.custas=Number(c.custas)||0;
+  r.debito=r.subtotal+r.honorarios+r.custas;
+  r.multa523=c.art523?r.debito*0.10:0;r.hon523=c.art523?r.debito*0.10:0;
+  r.total=r.debito+r.multa523+r.hon523;
+  r.faltando=Object.keys(falt).sort();
+  return r;
+}
+function idxInfo(){var at=S.indices.map(function(x){return x.atualizadoEm||''}).sort().pop();if(!S.indices.length)return '';
+  var ult=(S.indices.find(function(x){return x.id==='ipca'})||{}).valores;var u=ult?Object.keys(ult).sort().pop():'';
+  return 'Índices do Banco Central atualizados em '+fd((at||'').slice(0,10))+(u?' · último IPCA: '+u.slice(5)+'/'+u.slice(0,4):'')}
+function vCalculos(){
+  var h=ph('Cálculos','Atualização de débitos com correção monetária, juros, multa e honorários',CAN_WRITE?'<button class="btn pri" onclick="formCalculo()">'+ic('plus')+'Novo cálculo</button>':'');
+  if(!S.indices.length)h+='<div class="banner warn"><span>Os índices oficiais ainda não foram carregados. É preciso instalar a busca automática no banco (arquivo 004_indices.sql). Enquanto isso, só funcionam cálculos sem correção.</span></div>';
+  else h+='<div class="hint" style="margin:-6px 0 12px">'+esc(idxInfo())+'</div>';
+  var l=S.calculos.slice().sort(function(a,b){return (b.atualizadoEm||'')<(a.atualizadoEm||'')?-1:1});
+  if(!l.length)return h+'<div class="panel empty" style="padding:28px;text-align:center;color:var(--muted)">Nenhum cálculo salvo. Clique em “Novo cálculo”.</div>';
+  return h+'<div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Cálculo</th><th>Processo · cliente</th><th>Data-base</th><th>Critérios</th><th class="r">Total</th></tr></thead><tbody>'+l.map(function(c){var r=calcular(c);
+    return '<tr onclick="formCalculo(\''+c.id+'\')" style="cursor:pointer"><td><b>'+esc(c.titulo||'Cálculo')+'</b></td><td>'+esc(c.processo?procLabel(c.processo):'')+(c.cliente?'<div style="color:var(--muted);font-size:12.5px">'+esc(nomeCli(c.cliente))+'</div>':'')+'</td><td>'+fd(c.dataFinal)+'</td><td style="font-size:12.5px">'+esc(IDX_NOMES[c.indice]||'')+(c.lei14905?' → IPCA':'')+' · '+esc((JUROS_T[c.juros]||'').split(' (')[0])+'</td><td class="r"><b>'+money(r.total)+'</b></td></tr>'}).join('')+'</tbody></table></div></div>';
+}
+var CALC=null;
+function formCalculo(id,preset){
+  var c=id?JSON.parse(JSON.stringify(byId('calculos',id)||{})):Object.assign({titulo:'Atualização de débito',dataFinal:today(),indice:'inpc',lei14905:true,juros:'cc',jurosDesde:'vencimento',multaPct:0,honorariosPct:0,custas:0,art523:false,parcelas:[{desc:'',data:'',valor:''}]},preset||{});
+  if(!c.parcelas||!c.parcelas.length)c.parcelas=[{desc:'',data:'',valor:''}];
+  CALC={id:id||null,c:c};
+  var o=function(map,v){return Object.keys(map).map(function(k){return '<option value="'+k+'"'+(k===v?' selected':'')+'>'+esc(map[k])+'</option>'}).join('')};
+  var procs=S.processos.map(function(p){return '<option value="'+p.id+'"'+(p.id===c.processo?' selected':'')+'>'+esc((p.numero||'')+' · '+nomeCli(p.cliente))+'</option>'}).join('');
+  openModal('<div class="hd"><h2>'+ic('calculos')+' '+(id?'Cálculo':'Novo cálculo')+'</h2><button class="x" onclick="closeModal()" aria-label="Fechar">×</button></div><div class="bd block" style="display:flex;flex-direction:column;gap:14px" oninput="calcLer()" onchange="calcLer()">'+
+    '<div style="display:grid;grid-template-columns:2fr 2fr 1fr;gap:10px"><div class="f"><label for="ca-titulo">Título</label><input id="ca-titulo" value="'+esc(c.titulo||'')+'"></div><div class="f"><label for="ca-proc">Processo (opcional)</label><select id="ca-proc"><option value="">—</option>'+procs+'</select></div><div class="f"><label for="ca-fim">Atualizar até</label><input type="date" id="ca-fim" value="'+esc(c.dataFinal||today())+'"></div></div>'+
+    '<div class="panel" style="padding:12px 14px"><div style="font-weight:600;margin-bottom:8px">Valores devidos</div><div id="ca-parc"></div><button type="button" class="btn sm" onclick="calcAddParc()">'+ic('plus')+'Adicionar parcela</button> <button type="button" class="btn sm" onclick="calcSerie()">Gerar parcelas mensais</button></div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">'+
+      '<div class="f"><label for="ca-idx">Correção monetária</label><select id="ca-idx">'+o(IDX_NOMES,c.indice)+'</select></div>'+
+      '<div class="f"><label for="ca-juros">Juros de mora</label><select id="ca-juros">'+o(JUROS_T,c.juros)+'</select></div>'+
+      '<div class="f"><label for="ca-jdesde">Juros contados desde</label><select id="ca-jdesde"><option value="vencimento"'+(c.jurosDesde!=='citacao'?' selected':'')+'>Cada vencimento</option><option value="citacao"'+(c.jurosDesde==='citacao'?' selected':'')+'>A citação</option></select></div>'+
+      '<div class="f"><label for="ca-cit">Data da citação</label><input type="date" id="ca-cit" value="'+esc(c.citacao||'')+'"></div>'+
+      '<div class="f"><label for="ca-multa">Multa contratual (%)</label><input type="number" step="0.01" id="ca-multa" value="'+esc(c.multaPct||0)+'"></div>'+
+      '<div class="f"><label for="ca-hon">Honorários de sucumbência (%)</label><input type="number" step="0.01" id="ca-hon" value="'+esc(c.honorariosPct||0)+'"></div>'+
+      '<div class="f"><label for="ca-custas">Custas e despesas (R$)</label><input type="number" step="0.01" id="ca-custas" value="'+esc(c.custas||0)+'"></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:18px;flex-wrap:wrap;font-size:13.5px"><label style="display:flex;gap:6px"><input type="checkbox" id="ca-lei"'+(c.lei14905?' checked':'')+'> Usar IPCA a partir de 30/08/2024 (Lei 14.905/2024)</label><label style="display:flex;gap:6px"><input type="checkbox" id="ca-523"'+(c.art523?' checked':'')+'> Incluir multa de 10% e honorários de 10% (art. 523, §1º, CPC)</label></div>'+
+    '<div id="ca-res"></div></div>'+
+    '<div class="ft">'+(id&&CAN_WRITE?'<button class="btn ghost danger" onclick="calcExcluir()">Excluir</button>':'<span></span>')+'<div class="r"><button class="btn" onclick="calcImprimir()">'+ic('pdf')+'Demonstrativo (PDF)</button>'+(CAN_WRITE?'<button class="btn pri" onclick="calcSalvar()">Salvar</button>':'')+'</div></div>',true);
+  calcParcHTML();calcRes();
+}
+function calcParcHTML(){var c=CALC.c,el=document.getElementById('ca-parc');if(!el)return;
+  el.innerHTML='<div style="display:grid;grid-template-columns:3fr 1.3fr 1.3fr 32px;gap:6px;font-size:12px;color:var(--muted);margin-bottom:4px"><span>Descrição</span><span>Vencimento</span><span>Valor (R$)</span><span></span></div>'+c.parcelas.map(function(p,i){
+    return '<div style="display:grid;grid-template-columns:3fr 1.3fr 1.3fr 32px;gap:6px;margin-bottom:6px"><input data-p="desc" data-i="'+i+'" value="'+esc(p.desc||'')+'" placeholder="Ex.: aluguel de março"><input type="date" data-p="data" data-i="'+i+'" value="'+esc(p.data||'')+'"><input type="number" step="0.01" data-p="valor" data-i="'+i+'" value="'+esc(p.valor)+'"><button type="button" class="btn sm ghost" title="Remover" onclick="calcRemParc('+i+')">×</button></div>'}).join('')}
+function calcLer(){var c=CALC.c,g=function(id){var e=document.getElementById(id);return e?e.value:''};
+  c.titulo=g('ca-titulo');c.processo=g('ca-proc');var p=byId('processos',c.processo);c.cliente=p?p.cliente:'';c.dataFinal=g('ca-fim')||today();
+  c.indice=g('ca-idx');c.juros=g('ca-juros');c.jurosDesde=g('ca-jdesde');c.citacao=g('ca-cit');c.multaPct=g('ca-multa');c.honorariosPct=g('ca-hon');c.custas=g('ca-custas');
+  c.lei14905=document.getElementById('ca-lei').checked;c.art523=document.getElementById('ca-523').checked;
+  document.querySelectorAll('#ca-parc [data-p]').forEach(function(e){var i=+e.getAttribute('data-i'),k=e.getAttribute('data-p');if(c.parcelas[i])c.parcelas[i][k]=k==='valor'?(e.value===''?'':Number(e.value)):e.value});
+  calcRes()}
+function calcAddParc(){calcLer();CALC.c.parcelas.push({desc:'',data:'',valor:''});calcParcHTML()}
+function calcRemParc(i){calcLer();CALC.c.parcelas.splice(i,1);if(!CALC.c.parcelas.length)CALC.c.parcelas.push({desc:'',data:'',valor:''});calcParcHTML();calcRes()}
+function calcSerie(){calcLer();var ini=prompt('Primeiro vencimento (dd/mm/aaaa):');if(!ini)return;ini=isoBR(ini);if(!ini){toast('Data inválida');return}
+  var n=parseInt(prompt('Quantas parcelas mensais?','12'),10);if(!(n>0&&n<=600))return;var v=Number(String(prompt('Valor de cada parcela (R$):')||'').replace(/\./g,'').replace(',','.'));if(!v){toast('Valor inválido');return}
+  var d=+ini.slice(8,10),ps=CALC.c.parcelas.filter(function(p){return p.data||p.valor});
+  for(var k=0;k<n;k++){var ym=ymAdd(ini.slice(0,7),k),dd=Math.min(d,diasNoMes(ym));ps.push({desc:'Parcela '+(k+1)+'/'+n,data:ym+'-'+('0'+dd).slice(-2),valor:v})}
+  CALC.c.parcelas=ps;calcParcHTML();calcRes()}
+function calcRes(){var el=document.getElementById('ca-res');if(!el)return;var r=calcular(CALC.c);
+  if(!r.linhas.length){el.innerHTML='<div class="hint">Informe ao menos um valor com data de vencimento.</div>';return}
+  var L=function(a,b,f){return '<tr'+(f?' style="font-weight:700;border-top:2px solid var(--line)"':'')+'><td>'+a+'</td><td class="r">'+money(b)+'</td></tr>'};
+  el.innerHTML=(r.faltando.length?'<div class="banner warn"><span>Sem índice para: '+esc(r.faltando.slice(0,6).join(', '))+(r.faltando.length>6?' e outros':'')+'. Esses meses entraram com variação zero.</span></div>':'')+
+    '<div class="panel" style="padding:12px 14px"><table style="width:100%;font-size:13.5px">'+L('Valor original',r.principal)+L('Correção monetária',r.correcao)+L('Juros de mora',r.juros)+(r.multa?L('Multa contratual',r.multa):'')+L('Subtotal',r.subtotal)+(r.honorarios?L('Honorários de sucumbência',r.honorarios):'')+(r.custas?L('Custas e despesas',r.custas):'')+(CALC.c.art523?L('Multa art. 523 (10%)',r.multa523)+L('Honorários art. 523 (10%)',r.hon523):'')+L('Total atualizado em '+fd(CALC.c.dataFinal),r.total,1)+'</table></div>'}
+async function calcSalvar(){calcLer();var c=CALC.c;if(!calcular(c).linhas.length){toast('Informe ao menos um valor com vencimento');return}
+  var d=JSON.parse(JSON.stringify(c));delete d.id;try{var nid=await save('calculos',d,CALC.id||undefined);CALC.id=nid||CALC.id;toast('Cálculo salvo');closeModal();if(R!=='calculos'&&!c.processo)go('calculos');else render()}catch(e){toast('Não foi possível salvar')}}
+async function calcExcluir(){if(!CALC.id||!confirm('Excluir este cálculo?'))return;await removeDoc('calculos',CALC.id);closeModal();toast('Cálculo excluído')}
+function calcImprimir(){calcLer();var c=CALC.c,r=calcular(c);if(!r.linhas.length){toast('Informe ao menos um valor');return}
+  var p=byId('processos',c.processo),juros=JUROS_T[c.juros]||'',idx=IDX_NOMES[c.indice]||'';
+  var crit=['Correção monetária: '+idx+(c.lei14905&&c.indice!=='nenhum'?' até 08/2024 e IPCA a partir de 09/2024 (Lei 14.905/2024)':'')+', pela variação mensal desde o mês do vencimento até o mês anterior à data-base.',
+    'Juros de mora: '+juros+', contados '+(c.jurosDesde==='citacao'&&c.citacao?'da citação ('+fd(c.citacao)+')':'de cada vencimento')+', pro rata die, sobre o valor corrigido.',
+    (Number(c.multaPct)?'Multa contratual de '+c.multaPct+'% sobre o valor corrigido.':''),(Number(c.honorariosPct)?'Honorários de sucumbência de '+c.honorariosPct+'% sobre o subtotal.':''),
+    (c.art523?'Multa de 10% e honorários de 10% do art. 523, §1º, do CPC, sobre o débito.':''),'Fonte dos índices: Banco Central do Brasil (Sistema Gerenciador de Séries Temporais).'].filter(Boolean);
+  var n=function(x,d){return Number(x).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d})};
+  var html='<!doctype html><html><head><meta charset="utf-8"><title>'+esc(c.titulo||'Cálculo')+'</title><style>body{font:12px/1.45 Georgia,serif;color:#222;margin:28px}h1{font-size:17px;margin:0 0 2px}h2{font-size:13px;margin:18px 0 6px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #bbb;padding:4px 6px;text-align:left}th{background:#f3efe6}td.r,th.r{text-align:right}.tot td{font-weight:bold;background:#faf7f0}.cab{border-bottom:2px solid #9c7b2f;padding-bottom:8px;margin-bottom:12px}.m{color:#666}@media print{body{margin:12mm}}</style></head><body>'+
+    '<div class="cab"><b>'+esc(CFG.escritorio||'Pontes Rodrigues Sociedade de Advogados')+'</b><div class="m">Demonstrativo de cálculo · elaborado em '+fd(today())+'</div></div>'+
+    '<h1>'+esc(c.titulo||'Atualização de débito')+'</h1>'+(p?'<div>Processo '+esc(p.numero||'')+' · '+esc(nomeCli(p.cliente))+(p.parteContraria?' × '+esc(p.parteContraria):'')+'</div>':'')+'<div>Data-base: <b>'+fd(c.dataFinal)+'</b></div>'+
+    '<h2>Critérios</h2><ul style="margin:0;padding-left:18px">'+crit.map(function(x){return '<li>'+esc(x)+'</li>'}).join('')+'</ul>'+
+    '<h2>Memória de cálculo</h2><table><thead><tr><th>Descrição</th><th>Vencimento</th><th class="r">Valor original</th><th class="r">Fator de correção</th><th class="r">Valor corrigido</th><th class="r">Juros (%)</th><th class="r">Juros (R$)</th><th class="r">Total</th></tr></thead><tbody>'+
+    r.linhas.map(function(l){return '<tr><td>'+esc(l.desc)+'</td><td>'+fd(l.data)+'</td><td class="r">'+n(l.valor,2)+'</td><td class="r">'+n(l.fator,6)+'</td><td class="r">'+n(l.corrigido,2)+'</td><td class="r">'+n(l.jurosPct,4)+'</td><td class="r">'+n(l.juros,2)+'</td><td class="r">'+n(l.total,2)+'</td></tr>'}).join('')+
+    '<tr class="tot"><td colspan="2">Somas</td><td class="r">'+n(r.principal,2)+'</td><td></td><td class="r">'+n(r.corrigido,2)+'</td><td></td><td class="r">'+n(r.juros,2)+'</td><td class="r">'+n(r.corrigido+r.juros,2)+'</td></tr></tbody></table>'+
+    '<h2>Resumo</h2><table style="width:60%">'+[['Valor original',r.principal],['Correção monetária',r.correcao],['Juros de mora',r.juros],r.multa?['Multa contratual ('+c.multaPct+'%)',r.multa]:null,['Subtotal',r.subtotal],r.honorarios?['Honorários de sucumbência ('+c.honorariosPct+'%)',r.honorarios]:null,r.custas?['Custas e despesas',r.custas]:null,c.art523?['Multa art. 523, §1º, CPC (10%)',r.multa523]:null,c.art523?['Honorários art. 523, §1º, CPC (10%)',r.hon523]:null].filter(Boolean).map(function(x){return '<tr><td>'+esc(x[0])+'</td><td class="r">R$ '+n(x[1],2)+'</td></tr>'}).join('')+
+    '<tr class="tot"><td>TOTAL EM '+fd(c.dataFinal)+'</td><td class="r">R$ '+n(r.total,2)+'</td></tr></table>'+
+    (r.faltando.length?'<p class="m">Observação: meses sem índice publicado até a data do cálculo foram considerados com variação zero ('+esc(r.faltando.join(', '))+').</p>':'')+
+    '<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>';
+  var w=window.open('','_blank');if(!w){toast('Permita pop-ups para gerar o demonstrativo');return}w.document.open();w.document.write(html);w.document.close();
+}
+/* atalho no processo */
+(function(){var _vp=verProcesso;verProcesso=function(id){var r=_vp.apply(this,arguments);
+  try{var ch=document.querySelector('#dlg .pchips');if(ch&&!ch.querySelector('#btn-calc')){var n=S.calculos.filter(function(c){return c.processo===id}).length;
+    ch.insertAdjacentHTML('beforeend','<button class="chip" id="btn-calc" onclick="calcDoProc(\''+id+'\')">+ Cálculo'+(n?' ('+n+')':'')+'</button>')}}catch(e){}
+  return r}})();
+function calcDoProc(id){var cs=S.calculos.filter(function(c){return c.processo===id});closeModal();
+  if(cs.length&&confirm('Este processo já tem '+cs.length+' cálculo(s). Abrir o mais recente? (Cancelar cria um novo)')){cs.sort(function(a,b){return (b.atualizadoEm||'')<(a.atualizadoEm||'')?-1:1});return formCalculo(cs[0].id)}
+  var p=byId('processos',id)||{};formCalculo(null,{processo:id,cliente:p.cliente||'',titulo:'Atualização de débito'+(p.numero?' · '+p.numero:'')})}
 
 boot();
 </script>
