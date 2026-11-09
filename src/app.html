@@ -2378,6 +2378,7 @@ function tribNome(t,uf){t=String(t||'').toUpperCase().replace(/\s/g,'');var m;
   return t||''}
 function dataExtenso(iso){var M=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];var d=String(iso||today()).split('-');return (+d[2])+' de '+M[+d[1]-1]+' de '+d[0]}
 function cidadeEsc(){if(CFG.cidade)return CFG.cidade;var m=String(CFG.endereco||'').match(/[–-]\s*([A-ZÀ-Ú][A-Za-zÀ-ú ]+?)\s*[–-]\s*[A-Z]{2}\b/);return m?m[1].trim():'Curitiba'}
+function logoEsc(){var i=document.querySelector('.brand img');return i?i.src:''}
 function fatDocHTML(f){
   var c=byId('clientes',f.cliente)||{},p=byId('processos',f.processo),s=fatStatus(f);
   var pag=f.pagador?(byId('clientes',f.pagador)||c):c;
@@ -2394,12 +2395,11 @@ function fatDocHTML(f){
   var itens=(f.itens||[]).filter(function(i){return i.descricao||Number(i.valor)});
   var comp=f.competencia||f.emissao;
   return '<div style="width:794px;background:#fff;color:#1a1a1a;font-family:Quicksand,Segoe UI,sans-serif;font-weight:500;font-size:12px;line-height:1.55;position:relative">'+
-   '<img src="'+HEADER_IMG+'" alt="Pontes Rodrigues Sociedade de Advogados" style="display:block;width:794px;height:101px">'+
-   '<div style="padding:22px 56px 18px">'+
+   '<div style="padding:30px 56px 18px">'+
    // título e numeração
    '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px">'+
-     '<div><div style="font-family:Oswald,Arial Narrow,sans-serif;font-size:24px;font-weight:600;letter-spacing:.03em">Fatura de Honorários</div>'+
-     '<div style="margin-top:8px"><b style="font-size:12.5px">'+esc((CFG.escritorio||'').toUpperCase())+'</b>'+(CFG.cnpj?'<br>CNPJ: '+esc(CFG.cnpj):'')+(CFG.oab?'<br>'+esc(CFG.oab):'')+'<br>'+esc(CFG.endereco)+'<br>Tel.: '+esc(CFG.telefone)+' · E-mail: '+esc(CFG.email)+'</div></div>'+
+     '<div><div style="display:flex;align-items:center;gap:18px"><img src="'+logoEsc()+'" alt="Pontes Rodrigues Sociedade de Advogados" style="height:58px;width:auto;display:block"><div style="border-left:2px solid '+OURO+';padding-left:16px;font-family:Oswald,Arial Narrow,sans-serif;font-size:24px;font-weight:600;letter-spacing:.03em;line-height:1.1">Fatura de<br>Honorários</div></div>'+
+     '<div style="margin-top:14px"><b style="font-size:12.5px">'+esc((CFG.escritorio||'').toUpperCase())+'</b>'+(CFG.cnpj?'<br>CNPJ: '+esc(CFG.cnpj):'')+(CFG.oab?'<br>'+esc(CFG.oab):'')+'<br>'+esc(CFG.endereco)+'<br>Tel.: '+esc(CFG.telefone)+' · E-mail: '+esc(CFG.email)+'</div></div>'+
      '<table style="border-collapse:collapse;font-size:12px;min-width:250px"><tr><td style="padding:3px 10px;text-align:right;color:#555">Fatura nº</td><td style="padding:3px 0;text-align:right;font-family:Oswald,Arial Narrow,sans-serif;font-size:20px;font-weight:600">'+esc(f.numero||'')+'</td></tr>'+
      '<tr><td style="padding:3px 10px;text-align:right;color:#555">Data de emissão</td><td style="text-align:right"><b>'+fd(f.emissao)+'</b></td></tr>'+
      '<tr><td style="padding:3px 10px;text-align:right;color:#555">Data de vencimento</td><td style="text-align:right"><b>'+fd(f.vencimento)+'</b></td></tr>'+
@@ -2429,9 +2429,8 @@ function fatDocHTML(f){
    (s==='Vencida'?'<div style="margin-top:6px;text-align:right;color:#a92c26">Vencida há '+fatAtraso(f)+' dias · valor atualizado em '+fd(today())+': <b>'+money(fatAtualizado(f))+'</b></div>':'')+
    '<div style="margin-top:14px;font-size:11px;color:#444">Em caso de atraso: multa de '+esc(String(f.multa!=null?f.multa:CFG.multa).replace('.',','))+'% e juros de '+esc(String(f.juros!=null?f.juros:CFG.juros).replace('.',','))+'% ao mês, pro rata die.'+(f.obs?'<br>'+esc(f.obs):'')+'</div>'+
    // assinatura
-   '<div style="margin:34px auto 0;width:330px;border-top:1px solid #1a1a1a;padding-top:6px;text-align:center;font-size:11.5px"><b>'+esc((CFG.escritorio||'').toUpperCase())+'</b></div>'+
-   '<div style="margin-top:16px;text-align:center">'+esc(cidadeEsc())+', '+dataExtenso(f.emissao)+'.</div>'+
-   '</div><div style="margin:0 56px;border-top:2px solid '+OURO+';padding:8px 0 20px;text-align:center;font-size:9.5px;line-height:1.55;color:#333">'+esc(CFG.endereco)+'<br>Telefone: '+esc(CFG.telefone)+' – E-mail: '+esc(CFG.email)+'<br>'+esc(CFG.site)+'</div></div>';
+   '<div style="margin-top:26px;text-align:center">'+esc(cidadeEsc())+', '+dataExtenso(f.emissao)+'.</div>'+
+   '</div></div>';
 }
 
 boot();
