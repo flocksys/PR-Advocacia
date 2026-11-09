@@ -1312,7 +1312,7 @@ F_PROC=[['numero','Número do processo (CNJ)','text',null,1,'Formato CNJ: NNNNNN
  ['honorarios','Honorários contratados','text',null,0,'Ex.: R$ 5.000 em 5x + 20% de êxito'],['link','Link dos autos (Projudi, PJe, e-SAJ)','text',null,1],['obs','Estratégia / observações','textarea',3,1]];
 ROUTES.forEach(function(r){if(r[0]==='clientes')r[1]='Pessoas';if(r[0]==='publicacoes')r[1]='Atos processuais'});
 var CT_T=['Cliente','Parte contrária','Advogado','Perito','Testemunha','Fornecedor','Órgão público','Outro'];
-F_CLI=[['nome','Nome / razão social','text',null,1],['tipo','Categoria','select',CT_T],['pessoa','Pessoa','select',['Física','Jurídica']],['doc','CPF / CNPJ','text'],['email','E-mail','email'],['telefone','Telefone / WhatsApp','text'],
+F_CLI=[['doc','CPF / CNPJ','text',null,0,'Digite o CNPJ para preencher os demais campos automaticamente'],['pessoa','Pessoa','select',['Física','Jurídica']],['nome','Nome / razão social','text',null,1],['tipo','Categoria','select',CT_T],['email','E-mail','email'],['telefone','Telefone / WhatsApp','text'],
  ['cep','CEP','text'],['endereco','Endereço','text',null,1],['cidade','Cidade','text'],['uf','UF','text'],['contato','Pessoa de contato (PJ)','text'],['responsavel','Responsável no escritório','team'],['origem','Como chegou','select',['Indicação','Instagram','Site','Google','Cliente antigo','Outro']],
  ['portalMsg','Mensagem no portal do cliente','textarea',2,1,'Texto exibido ao cliente na área dele (orientações, próximos passos)'],['obs','Observações','textarea',2,1]];
 function tipoCt(c){return c.tipo||'Cliente'}
@@ -1873,6 +1873,7 @@ salvarCfg=async function(e){var t=document.getElementById('cf-oabs');if(!t){var 
 var CNPJ_ULT='';
 function cnpjFmt(d){return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5')}
 function cnpjHint(t,cls){var f=document.getElementById('fm-doc');if(!f)return;var h=document.getElementById('hint-doc');if(!h){h=document.createElement('div');h.id='hint-doc';h.className='hint';f.parentNode.appendChild(h)}h.textContent=t;h.style.color=cls==='erro'?'#8a1c12':''}
+function cpfValido(d){if(!/^\d{11}$/.test(d)||/^(\d)\1+$/.test(d))return false;function dv(n){var s=0;for(var i=0;i<n;i++)s+=+d[i]*(n+1-i);var r=(s*10)%11;return r===10?0:r}return dv(9)===+d[9]&&dv(10)===+d[10]}
 function cnpjValido(d){if(!/^\d{14}$/.test(d)||/^(\d)\1+$/.test(d))return false;function dv(n){var s=0,p=n-7;for(var i=0;i<n;i++){s+=+d[i]*p--;if(p<2)p=9}var r=s%11;return r<2?0:11-r}return dv(12)===+d[12]&&dv(13)===+d[13]}
 async function cnpjBuscar(d){
   try{var r=await fetch('https://brasilapi.com.br/api/cnpj/v1/'+d);if(r.ok){var j=await r.json();return {nome:j.razao_social,fantasia:j.nome_fantasia,end:[[j.descricao_tipo_de_logradouro,j.logradouro].filter(Boolean).join(' '),j.numero,j.complemento,j.bairro].filter(Boolean).join(', ')+(j.cep?' – CEP '+String(j.cep).replace(/^(\d{5})(\d{3})$/,'$1-$2'):''),cidade:j.municipio,uf:j.uf,email:j.email,tel:j.ddd_telefone_1,socio:(j.qsa&&j.qsa[0]&&j.qsa[0].nome_socio)||'',situacao:j.descricao_situacao_cadastral}}if(r.status===404)return null}catch(e){}
@@ -1883,7 +1884,9 @@ function telFmt(t){t=String(t||'').replace(/\D/g,'');return t.length===10?'('+t.
 function titulo(s){return String(s||'').toLowerCase().replace(/(^|[\s(\/-])([a-zà-ú])/g,function(m,a,b){return a+b.toUpperCase()}).replace(/\b(Da|De|Do|Das|Dos|E)\b/g,function(m){return m.toLowerCase()})}
 document.addEventListener('input',async function(ev){
   var el=ev.target;if(!el||el.id!=='fm-doc'||!CUR||CUR.col!=='clientes')return;
-  var d=el.value.replace(/\D/g,'');if(d.length!==14){if(d.length>11)cnpjHint('Digite os 14 números do CNPJ para preencher os dados automaticamente.');return}
+  var d=el.value.replace(/\D/g,'');
+  if(d.length===11&&/^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/.test(el.value.trim())){el.value=d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4');var pf=document.getElementById('fm-pessoa');if(pf)pf.value='Física';cnpjHint(cpfValido(d)?'CPF de pessoa física: preencha os dados e use o CEP para buscar o endereço.':'CPF inválido. Confira os números.',cpfValido(d)?'':'erro');CNPJ_ULT='';return}
+  if(d.length!==14){if(d.length>11)cnpjHint('Digite os 14 números do CNPJ para preencher os dados automaticamente.');return}
   if(d===CNPJ_ULT)return;CNPJ_ULT=d;
   if(!cnpjValido(d)){cnpjHint('CNPJ inválido. Confira os números.','erro');return}
   el.value=cnpjFmt(d);cnpjHint('Buscando dados na Receita Federal…');
