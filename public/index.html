@@ -1322,14 +1322,14 @@ F_PROC=[['numero','Número do processo (CNJ)','text',null,1,'Formato CNJ: NNNNNN
  ['parteContraria','Parte contrária','text'],['objeto','Ação / objeto','text'],['tribunal','Tribunal','text'],['uf','UF','text'],['instancia','Instância','select',INSTANCIAS],['orgao','Vara / órgão','text'],['comarca','Comarca','text'],
  ['area','Área','select',AREAS],['carteira','Carteira','text',null,0,'Ex.: Condominial, Contencioso cível, Consultivo'],['fase','Fase','select',FASES],['situacao','Situação','select',SIT],['responsavel','Responsável','team'],['valorCausa','Valor da causa (R$)','number'],['distribuicao','Distribuição','date'],
  ['honorarios','Honorários contratados','text',null,0,'Ex.: R$ 5.000 em 5x + 20% de êxito'],['link','Link dos autos (Projudi, PJe, e-SAJ)','text',null,1],['obs','Estratégia / observações','textarea',3,1]];
-ROUTES.forEach(function(r){if(r[0]==='clientes')r[1]='Contatos';if(r[0]==='publicacoes')r[1]='Atos processuais'});
+ROUTES.forEach(function(r){if(r[0]==='clientes')r[1]='Pessoas';if(r[0]==='publicacoes')r[1]='Atos processuais'});
 var CT_T=['Cliente','Parte contrária','Advogado','Perito','Testemunha','Fornecedor','Órgão público','Outro'];
-F_CLI=[['nome','Nome / razão social','text',null,1],['tipo','Tipo de contato','select',CT_T],['pessoa','Pessoa','select',['Física','Jurídica']],['doc','CPF / CNPJ','text'],['email','E-mail','email'],['telefone','Telefone / WhatsApp','text'],
+F_CLI=[['nome','Nome / razão social','text',null,1],['tipo','Categoria','select',CT_T],['pessoa','Pessoa','select',['Física','Jurídica']],['doc','CPF / CNPJ','text'],['email','E-mail','email'],['telefone','Telefone / WhatsApp','text'],
  ['endereco','Endereço','text',null,1],['cidade','Cidade','text'],['uf','UF','text'],['contato','Pessoa de contato (PJ)','text'],['responsavel','Responsável no escritório','team'],['origem','Como chegou','select',['Indicação','Instagram','Site','Google','Cliente antigo','Outro']],
  ['portalMsg','Mensagem no portal do cliente','textarea',2,1,'Texto exibido ao cliente na área dele (orientações, próximos passos)'],['obs','Observações','textarea',2,1]];
 function tipoCt(c){return c.tipo||'Cliente'}
 function optsCli(){return S.clientes.filter(function(c){return tipoCt(c)==='Cliente'}).sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'','pt-BR')}).map(function(c){return [c.id,c.nome]})}
-function formCliente(id,preset,after){openForm('clientes','contato',F_CLI,id,preset||{tipo:'Cliente',pessoa:'Física',origem:'Indicação'},after||function(nid){if(nid)verCliente(id||nid)})}
+function formCliente(id,preset,after){openForm('clientes','cadastro de pessoa',F_CLI,id,preset||{tipo:'Cliente',pessoa:'Física',origem:'Indicação'},after||function(nid){if(nid)verCliente(id||nid)})}
 AG_T=['Atendimento','Audiência','Prazo','Reunião','Compromisso','Tarefa'];
 var AG_PRI=['Normal','Alta','Urgente'],KT=['A fazer','Em andamento','Revisão','Concluído'];
 F_AG=[['tipo','Tipo','select',AG_T],['titulo','Título','text',null,1],['data','Data','date'],['hora','Hora','time'],['processo','Processo','proc',null,1],['cliente','Cliente','cli'],['responsavel','Responsável','team'],
@@ -1445,7 +1445,7 @@ function procCSV(){var rows=V.procRows||S.processos;salvarArquivo('Processos '+t
 var IMP=[];
 var HMAP={'numero':'numero','número':'numero','processo':'numero','nº':'numero','número do processo':'numero','numero do processo':'numero','cliente':'cliente','parte':'cliente','autor':'cliente','parte contrária':'parteContraria','parte contraria':'parteContraria','adverso':'parteContraria','réu':'parteContraria','reu':'parteContraria','polo':'polo','objeto':'objeto','ação':'objeto','acao':'objeto','assunto':'objeto','classe':'objeto','vara':'orgao','órgão':'orgao','orgao':'orgao','juízo':'orgao','juizo':'orgao','comarca':'comarca','área':'area','area':'area','carteira':'carteira','responsável':'responsavel','responsavel':'responsavel','advogado':'responsavel','situação':'situacao','situacao':'situacao','status':'situacao','fase':'fase','valor':'valorCausa','valor da causa':'valorCausa','distribuição':'distribuicao','distribuicao':'distribuicao','data':'distribuicao','obs':'obs','observações':'obs','observacoes':'obs','tribunal':'tribunal','uf':'uf','instância':'instancia','instancia':'instancia','link':'link'};
 function procLote(){
-  openModal('<div class="hd"><h2>Importar processos em lote</h2><button class="x" onclick="closeModal()" aria-label="Fechar">×</button></div><div class="bd block" style="display:flex;flex-direction:column;gap:12px"><div class="banner info"><span>Cole os dados copiados do Excel ou de outro sistema: uma linha por processo, colunas separadas por tabulação ou ponto e vírgula, com cabeçalho na primeira linha. Cabeçalhos aceitos: <b>número, cliente, parte contrária, objeto, vara, comarca, tribunal, área, carteira, responsável, situação, fase, valor da causa, distribuição, link, obs</b>. Clientes que não existirem são criados em Contatos.</span></div>'+
+  openModal('<div class="hd"><h2>Importar processos em lote</h2><button class="x" onclick="closeModal()" aria-label="Fechar">×</button></div><div class="bd block" style="display:flex;flex-direction:column;gap:12px"><div class="banner info"><span>Cole os dados copiados do Excel ou de outro sistema: uma linha por processo, colunas separadas por tabulação ou ponto e vírgula, com cabeçalho na primeira linha. Cabeçalhos aceitos: <b>número, cliente, parte contrária, objeto, vara, comarca, tribunal, área, carteira, responsável, situação, fase, valor da causa, distribuição, link, obs</b>. Clientes que não existirem são criados em Pessoas.</span></div>'+
    '<div class="f full"><label for="imp-txt">Dados</label><textarea id="imp-txt" rows="9" placeholder="número;cliente;objeto;vara;área&#10;0001234-56.2026.8.16.0001;Condomínio Edifício X;Cobrança de cotas;3ª Vara Cível;Condominial"></textarea></div><div id="imp-out"></div></div>'+
    '<div class="ft"><span></span><div class="r"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn" onclick="impPreview()">Pré-visualizar</button><button class="btn pri" id="imp-go" onclick="impRun()" disabled>Importar</button></div></div>',true);
 }
@@ -1550,13 +1550,13 @@ function vClientes(){
   var grupos={'Cliente':['Cliente'],'Parte contrária':['Parte contrária'],'Fornecedor':['Fornecedor'],'Outros':['Advogado','Perito','Testemunha','Órgão público','Outro']};
   var cnt=function(k){return S.clientes.filter(function(c){return grupos[k].indexOf(tipoCt(c))>=0}).length};
   var acts=st.tab==='portal'?(CAN_WRITE?'<button class="btn" onclick="portalPublishAll()">Publicar todos</button>':''):'<button class="btn" onclick="ctCSV()">'+ic('dl')+'Exportar</button><button class="btn pri" onclick="formCliente(null,{tipo:\''+(st.tab==='Outros'||st.tab==='todos'?'Outro':st.tab)+'\',pessoa:\''+(st.tab==='Cliente'?'Física':'Jurídica')+'\',origem:\'Indicação\'})">'+ic('plus')+'Novo contato</button>';
-  var h=ph('Contatos','Clientes, partes contrárias, fornecedores e demais contatos do escritório',acts);
+  var h=ph('Pessoas','Clientes, partes contrárias, fornecedores e demais pessoas ligadas ao escritório',acts);
   h+=subTabs('cli',[['Cliente','Clientes',cnt('Cliente')],['Parte contrária','Partes contrárias',cnt('Parte contrária')],['Fornecedor','Fornecedores',cnt('Fornecedor')],['Outros','Outros',cnt('Outros')],['todos','Todos',S.clientes.length],['portal','Portal do cliente',S.clientes.filter(function(c){return c.portalUser}).length]],st.tab);
   if(st.tab==='portal')return h+vPortalAdmin();
   var rows=S.clientes.filter(function(c){return (st.tab==='todos'||grupos[st.tab].indexOf(tipoCt(c))>=0)&&(!st.f.tipo||tipoCt(c)===st.f.tipo)&&(!st.f.resp||c.responsavel===st.f.resp)&&(!st.f.uf||c.uf===st.f.uf)&&(!q||txt(c).indexOf(q)>=0)}).sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'','pt-BR')});
   V.ctRows=rows;var ufs=Array.from(new Set(S.clientes.map(function(c){return c.uf}).filter(Boolean))).sort();
   h+='<div class="toolbar"><input type="search" id="q-cli" placeholder="Buscar por nome, CPF/CNPJ, e-mail, cidade…" value="'+esc(st.q)+'" oninput="setQ(\'cli\',this.value)">'+(st.tab==='Outros'||st.tab==='todos'?sel('Tipo','cli','tipo',CT_T):'')+sel('Responsável','cli','resp',equipe())+(ufs.length?sel('UF','cli','uf',ufs):'')+'</div>';
-  if(!rows.length)return h+'<div class="panel"><div class="empty">Nenhum contato nesta aba.</div></div>';
+  if(!rows.length)return h+'<div class="panel"><div class="empty">Nenhuma pessoa nesta aba.</div></div>';
   var isCli=st.tab==='Cliente';
   h+='<div class="panel"><div class="tbl-wrap"><table><thead><tr><th>Nome</th><th>Tipo</th><th>Contato</th><th>Cidade</th><th class="r">Processos</th>'+(isCli?'<th class="r">Atendimentos</th><th class="r">Em aberto</th>':'')+'</tr></thead><tbody>'+rows.map(function(c){
     var ab=S.faturas.filter(function(f){return f.cliente===c.id&&['Emitida','Vencida'].indexOf(fatStatus(f))>=0});var venc=ab.some(function(f){return fatStatus(f)==='Vencida'});
@@ -1565,7 +1565,7 @@ function vClientes(){
       (isCli?'<td class="r num">'+S.atendimentos.filter(function(a){return a.cliente===c.id}).length+'</td><td class="r num">'+(ab.length?'<span class="pill '+(venc?'bad':'info')+'">'+money(ab.reduce(function(s,f){return s+fatAtualizado(f)},0))+'</span>':'—')+'</td>':'')+'</tr>'}).join('')+'</tbody></table></div></div>';
   return h;
 }
-function ctCSV(){salvarArquivo('Contatos '+today()+'.csv',csvDe(V.ctRows||S.clientes,[['Nome',function(c){return c.nome}],['Tipo',tipoCt],['Pessoa',function(c){return c.pessoa}],['CPF/CNPJ',function(c){return c.doc}],['E-mail',function(c){return c.email}],['Telefone',function(c){return c.telefone}],['Endereço',function(c){return c.endereco}],['Cidade',function(c){return c.cidade}],['UF',function(c){return c.uf}],['Responsável',function(c){return c.responsavel}],['Origem',function(c){return c.origem}]]),'text/csv')}
+function ctCSV(){salvarArquivo('Pessoas '+today()+'.csv',csvDe(V.ctRows||S.clientes,[['Nome',function(c){return c.nome}],['Tipo',tipoCt],['Pessoa',function(c){return c.pessoa}],['CPF/CNPJ',function(c){return c.doc}],['E-mail',function(c){return c.email}],['Telefone',function(c){return c.telefone}],['Endereço',function(c){return c.endereco}],['Cidade',function(c){return c.cidade}],['UF',function(c){return c.uf}],['Responsável',function(c){return c.responsavel}],['Origem',function(c){return c.origem}]]),'text/csv')}
 function verCliente(id){
   verClienteBase(id);var c=byId('clientes',id);if(!c)return;var hd=document.querySelector('#dlg .hd > div > div');
   if(hd)hd.textContent=[tipoCt(c),c.pessoa,c.doc,[c.cidade,c.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ');
@@ -1747,7 +1747,7 @@ var NAVSUB={
  publicacoes:[['Publicações',vset('atos','tab','pub')],['Intimações eletrônicas',vset('atos','tab','int')],['Movimentações',vset('atos','tab','mov')],['-'],['Registrar publicação',vset('atos','tab','pub'),'formPub()'],['Registrar intimação',vset('atos','tab','int'),'formInt()'],['Registrar movimentação',vset('atos','tab','mov'),'formMov()']],
  atendimentos:[['Quadro (Kanban)',vset('at','view','quadro')],['Lista',vset('at','view','lista')],['A faturar',function(){var st=filterState('at');st.view='lista';st.f.cob='A faturar'}],['-'],['Novo atendimento',null,'formAtendimento()']],
  agenda:[['Próximos',vset('ag','view','lista')],['Calendário',vset('ag','view','mes')],['Tabela',vset('ag','view','tabela')],['Quadro de tarefas',vset('ag','view','kanban')],['Concluídos',vset('ag','view','feitos')],['-'],['Atendimentos',vset('ag','f.tipo','Atendimento')],['Audiências',vset('ag','f.tipo','Audiência')],['Prazos processuais',vset('ag','f.tipo','Prazo')],['Reuniões',vset('ag','f.tipo','Reunião')],['Compromissos',vset('ag','f.tipo','Compromisso')],['Tarefas',vset('ag','f.tipo','Tarefa')],['Todos os tipos',vset('ag','f.tipo','')],['-'],['Novo compromisso',null,'formAgenda()']],
- clientes:[['Clientes',vset('cli','tab','Cliente')],['Partes contrárias',vset('cli','tab','Parte contrária')],['Fornecedores',vset('cli','tab','Fornecedor')],['Outros contatos',vset('cli','tab','Outros')],['Todos',vset('cli','tab','todos')],['Portal do cliente',vset('cli','tab','portal')],['-'],['Novo contato',null,'formCliente()']],
+ clientes:[['Clientes',vset('cli','tab','Cliente')],['Partes contrárias',vset('cli','tab','Parte contrária')],['Fornecedores',vset('cli','tab','Fornecedor')],['Outros',vset('cli','tab','Outros')],['Todos',vset('cli','tab','todos')],['Portal do cliente',vset('cli','tab','portal')],['-'],['Novo contato',null,'formCliente()']],
  contratos:[['Ver contratos',null],['Novo contrato',null,'formContrato()']],
  documentos:[['Ver documentos',null],['Novo documento',null,'formDoc()']],
  faturas:[['Em aberto',vset('fat','tab','abertas')],['Vencidas',vset('fat','tab','vencidas')],['Rascunhos',vset('fat','tab','rascunho')],['Pagas',vset('fat','tab','pagas')],['Todas',vset('fat','tab','todas')],['-'],['Nova fatura',null,'formFatura()']]
@@ -1880,6 +1880,36 @@ async function salvarAdv(e,i){e.preventDefault();var list=advs().map(function(x)
 async function removerAdv(i,btn){if(btn.dataset.c!=='1'){btn.dataset.c='1';btn.textContent='Confirmar remoção';return}var list=advs().slice();list.splice(i,1);try{await saveCfg(advSync(list));closeModal()}catch(e){}}
 var _salvarCfg=salvarCfg;
 salvarCfg=async function(e){var t=document.getElementById('cf-oabs');if(!t){var h=document.createElement('textarea');h.id='cf-oabs';h.style.display='none';h.value=advSync(advs()).oabs;document.body.appendChild(h);try{return await _salvarCfg(e)}finally{h.remove()}}return _salvarCfg(e)};
+
+/* ---------- preenchimento automático pelo CNPJ ---------- */
+var CNPJ_ULT='';
+function cnpjFmt(d){return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5')}
+function cnpjHint(t,cls){var f=document.getElementById('fm-doc');if(!f)return;var h=document.getElementById('hint-doc');if(!h){h=document.createElement('div');h.id='hint-doc';h.className='hint';f.parentNode.appendChild(h)}h.textContent=t;h.style.color=cls==='erro'?'#8a1c12':''}
+function cnpjValido(d){if(!/^\d{14}$/.test(d)||/^(\d)\1+$/.test(d))return false;function dv(n){var s=0,p=n-7;for(var i=0;i<n;i++){s+=+d[i]*p--;if(p<2)p=9}var r=s%11;return r<2?0:11-r}return dv(12)===+d[12]&&dv(13)===+d[13]}
+async function cnpjBuscar(d){
+  try{var r=await fetch('https://brasilapi.com.br/api/cnpj/v1/'+d);if(r.ok){var j=await r.json();return {nome:j.razao_social,fantasia:j.nome_fantasia,end:[[j.descricao_tipo_de_logradouro,j.logradouro].filter(Boolean).join(' '),j.numero,j.complemento,j.bairro].filter(Boolean).join(', ')+(j.cep?' – CEP '+String(j.cep).replace(/^(\d{5})(\d{3})$/,'$1-$2'):''),cidade:j.municipio,uf:j.uf,email:j.email,tel:j.ddd_telefone_1,socio:(j.qsa&&j.qsa[0]&&j.qsa[0].nome_socio)||'',situacao:j.descricao_situacao_cadastral}}if(r.status===404)return null}catch(e){}
+  try{var r2=await fetch('https://publica.cnpj.ws/cnpj/'+d);if(r2.ok){var k=await r2.json(),e=k.estabelecimento||{};return {nome:k.razao_social,fantasia:e.nome_fantasia,end:[[e.tipo_logradouro,e.logradouro].filter(Boolean).join(' '),e.numero,e.complemento,e.bairro].filter(Boolean).join(', ')+(e.cep?' – CEP '+String(e.cep).replace(/^(\d{5})(\d{3})$/,'$1-$2'):''),cidade:e.cidade&&e.cidade.nome,uf:e.estado&&e.estado.sigla,email:e.email,tel:e.ddd1&&e.telefone1?e.ddd1+e.telefone1:'',socio:(k.socios&&k.socios[0]&&k.socios[0].nome)||'',situacao:e.situacao_cadastral}}if(r2.status===404)return null}catch(e){}
+  throw new Error('rede');
+}
+function telFmt(t){t=String(t||'').replace(/\D/g,'');return t.length===10?'('+t.slice(0,2)+') '+t.slice(2,6)+'-'+t.slice(6):t.length===11?'('+t.slice(0,2)+') '+t.slice(2,7)+'-'+t.slice(7):t}
+function titulo(s){return String(s||'').toLowerCase().replace(/(^|[\s(\/-])([a-zà-ú])/g,function(m,a,b){return a+b.toUpperCase()}).replace(/\b(Da|De|Do|Das|Dos|E)\b/g,function(m){return m.toLowerCase()})}
+document.addEventListener('input',async function(ev){
+  var el=ev.target;if(!el||el.id!=='fm-doc'||!CUR||CUR.col!=='clientes')return;
+  var d=el.value.replace(/\D/g,'');if(d.length!==14){if(d.length>11)cnpjHint('Digite os 14 números do CNPJ para preencher os dados automaticamente.');return}
+  if(d===CNPJ_ULT)return;CNPJ_ULT=d;
+  if(!cnpjValido(d)){cnpjHint('CNPJ inválido. Confira os números.','erro');return}
+  el.value=cnpjFmt(d);cnpjHint('Buscando dados na Receita Federal…');
+  var x;try{x=await cnpjBuscar(d)}catch(e){cnpjHint('Não foi possível consultar o CNPJ agora. Preencha manualmente ou tente de novo.','erro');CNPJ_ULT='';return}
+  if(!x){cnpjHint('CNPJ não encontrado na Receita Federal.','erro');return}
+  if(document.getElementById('fm-doc')!==el)return;
+  function put(k,v){var f=document.getElementById('fm-'+k);if(f&&v&&(!f.value||f.value==='Física'))f.value=v}
+  var p=document.getElementById('fm-pessoa');if(p)p.value='Jurídica';
+  put('nome',x.nome);put('endereco',titulo(x.end).replace(' – Cep ',' – CEP '));put('cidade',titulo(x.cidade));put('uf',(x.uf||'').toUpperCase());
+  put('email',(x.email||'').toLowerCase());put('telefone',telFmt(x.tel));put('contato',titulo(x.socio));
+  var ob=document.getElementById('fm-obs');if(ob&&x.fantasia&&ob.value.indexOf('Nome fantasia')<0)ob.value=(ob.value?ob.value+'\n':'')+'Nome fantasia: '+x.fantasia;
+  var sit=String(x.situacao||'').toUpperCase();
+  cnpjHint('Dados preenchidos pela Receita Federal'+(sit?' · situação: '+sit:'')+'. Confira antes de salvar.',sit&&sit!=='ATIVA'?'erro':'');
+});
 
 boot();
 </script>
