@@ -1409,7 +1409,7 @@ function vProcessos(){
   V.procRows=rows;
   var uniq=function(k){return Array.from(new Set(S.processos.map(function(p){return p[k]}).filter(Boolean))).sort()};
   var h=ph('Processos',S.processos.length+' cadastrados · '+S.processos.filter(function(p){return ['Encerrado','Arquivado'].indexOf(p.situacao)<0}).length+' ativos',
-    (CAN_WRITE?'<button class="btn" onclick="procIA()"'+aiOff()+'>'+ic('spark')+'Cadastrar por IA</button><button class="btn" onclick="procAutos()">'+ic('pdf')+'Importar autos (PDF)</button><button class="btn" onclick="procLote()">'+ic('up')+'Importar em lote</button>':'')+'<button class="btn" onclick="procCSV()">'+ic('dl')+'Exportar</button><button class="btn pri" onclick="formProcesso()">'+ic('plus')+'Novo processo</button>');
+    (CAN_WRITE?'<button class="btn" onclick="procIA()"'+aiOff()+'>'+ic('spark')+'Cadastrar por IA</button><button class="btn" onclick="procAutos()">'+ic('pdf')+'Cadastrar pelo PDF</button><button class="btn" onclick="procLote()">'+ic('up')+'Importar em lote</button>':'')+'<button class="btn" onclick="procCSV()">'+ic('dl')+'Exportar</button><button class="btn pri" onclick="formProcesso()">'+ic('plus')+'Novo processo</button>');
   h+=subTabs('proc',[['todos','Todos',S.processos.length],['parados','Parados há +30 dias',S.processos.filter(procParado).length],['ajuizar','A ajuizar',S.processos.filter(aj).length]],st.tab);
   h+='<div class="toolbar"><input type="search" id="q-proc" placeholder="Buscar por número, cliente, parte, vara…" value="'+esc(st.q)+'" oninput="setQ(\'proc\',this.value)">'+
     sel('Situação','proc','sit',SIT)+sel('Área','proc','area',AREAS)+sel('Responsável','proc','resp',equipe())+(uniq('tribunal').length?sel('Tribunal','proc','trib',uniq('tribunal')):'')+(uniq('carteira').length?sel('Carteira','proc','cart',uniq('carteira')):'')+'</div>';
@@ -2086,6 +2086,119 @@ vProcessos=function(){var h=_vProcessosV();
     var n=filhosDe(p.id).length;if(n)extra+=' <span class="pill" title="Recursos e incidentes vinculados">'+n+' vinculado'+(n>1?'s':'')+'</span>';
     if(extra)h=h.replace(key,key+extra)});
   return h};
+
+/* ===== Cadastrar processo pela cópia em PDF (leitura no navegador, sem IA) ===== */
+var UF_TJ=['','AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SE','SP','TO'];
+var UF_TRT=['','RJ','SP','MG','RS','BA','PE','CE','PA','PR','DF','AM','SC','PB','RO','SP','MA','ES','GO','AL','SE','RN','PI','MT','MS'];
+function tribDoCNJ(n){var m=String(n||'').match(/\d{7}-\d{2}\.\d{4}\.(\d)\.(\d{2})\.(\d{4})/);if(!m)return {};var j=m[1],tr=+m[2];
+  if(j==='8'){var uf=UF_TJ[tr]||'';return {tribunal:uf==='DF'?'TJDFT':'TJ'+uf,uf:uf}}
+  if(j==='5')return {tribunal:'TRT'+tr,uf:UF_TRT[tr]||''};
+  if(j==='4')return {tribunal:'TRF'+tr,uf:''};
+  if(j==='3')return {tribunal:'STJ',uf:'DF'};if(j==='1')return {tribunal:'STF',uf:'DF'};if(j==='6')return {tribunal:'TRE',uf:UF_TJ[tr]||''};
+  return {}}
+function semAc(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim()}
+var POLO_A={autor:'Autor',autora:'Autor',autores:'Autor',requerente:'Requerente',requerentes:'Requerente',exequente:'Exequente',exequentes:'Exequente',reclamante:'Autor',impetrante:'Autor',apelante:'Autor',agravante:'Autor',embargante:'Autor',promovente:'Autor','polo ativo':'Autor',recorrente:'Autor',querelante:'Autor',suscitante:'Autor'};
+var POLO_P={reu:'Réu',re:'Réu',reus:'Réu',requerido:'Requerido',requerida:'Requerido',requeridos:'Requerido',executado:'Executado',executada:'Executado',executados:'Executado',reclamado:'Réu',reclamada:'Réu',impetrado:'Réu',apelado:'Réu',apelada:'Réu',agravado:'Réu',agravada:'Réu',embargado:'Réu',embargada:'Réu',promovido:'Réu',promovida:'Réu','polo passivo':'Réu',recorrido:'Réu',recorrida:'Réu',querelado:'Réu',suscitado:'Réu'};
+function lerAutos(t){
+  t=String(t||'').replace(/\r/g,'').replace(/[ \t ]+/g,' ');
+  var o={},m;
+  m=t.match(/\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/);if(!m){m=t.match(/\b(\d{7})(\d{2})(\d{4})(\d)(\d{2})(\d{4})\b/);if(m)m=[m[1]+'-'+m[2]+'.'+m[3]+'.'+m[4]+'.'+m[5]+'.'+m[6]]}
+  if(m){o.numero=m[0];Object.assign(o,tribDoCNJ(m[0]))}
+  var classe=(t.match(/Classe(?:\s+(?:judicial|processual))?\s*(?:-\s*Assunto)?\s*:\s*([^\n]{3,120})/i)||[])[1];
+  if(!classe){m=t.match(/(?:^|\n)\s*([A-ZÀ-Ú][A-ZÀ-Ú0-9 ,\/\-]{4,90}?)\s*\(\d{1,5}\)\s*(?:N[º°o.]*\s*)?\d{7}-\d{2}/);if(m)classe=m[1]}
+  var assunto=(t.match(/Assuntos?(?:\s+principal)?\s*:\s*([^\n]{3,140})/i)||[])[1];
+  if(classe)classe=classe.replace(/\s*\(\d+\)\s*$/,'').trim();
+  if(assunto)assunto=assunto.replace(/\s*\(\d+\)\s*/g,' ').trim();
+  if(assunto&&classe&&classe.indexOf(assunto)>=0)assunto='';
+  o.classe=classe||'';o.objeto=[classe,assunto].filter(Boolean).join(' — ').slice(0,200);
+  var org=(t.match(/(?:[ÓO]rg[ãa]o\s+julgador|Ju[íi]zo|Vara)\s*:\s*([^\n]{3,120})/i)||[])[1];
+  if(!org){m=t.match(/[^\n]{0,40}\b(?:\d+[ªaº]?\s+)?(?:Vara|Juizado|C[âa]mara|Turma Recursal)\b[^\n]{0,90}/i);if(m)org=m[0]}
+  if(org)o.orgao=org.replace(/\s*[-–]\s*(PROJUDI|PJE|EPROC|E-SAJ)\s*$/i,'').replace(/^\W+|\s+-\s*$/g,'').trim().slice(0,140);
+  var com=(t.match(/Comarca\s+(?:de|da|do)\s+([^\n,\-–\/]{3,60})/i)||t.match(/Comarca\s*:\s*([^\n,\-–]{3,60})/i)||[])[1]||'';
+  if(!com||/regi[ãa]o\s+metropolitana/i.test(com))com=(t.match(/Foro\s+(?:Regional\s+[IVXL]+\s*[-–]?\s*)?(?:Central\s+)?(?:C[íi]vel\s+)?(?:de|da|do)\s+([^\n,\-–\/]{3,40})/i)||[])[1]||com;
+  if(!com&&o.orgao)com=(o.orgao.replace(/\s*[-–].*$/,'').match(/.*\b(?:de|da|do)\s+([A-ZÀ-Úa-zà-ú][^,]{2,40})$/)||[])[1]||'';
+  com=com.replace(/\s+(?:Estado|Vara|Foro|Juizado|Processo)\b.*$/i,'').trim();
+  if(com&&!/regi[ãa]o\s+metropolitana/i.test(com))o.comarca=com.toLowerCase().replace(/(^|\s)(\S)/g,function(x){return x.toUpperCase()}).replace(/ (De|Da|Do|Dos|Das|E) /g,function(x){return x.toLowerCase()});
+  m=t.match(/Valor\s+da\s+causa\s*:?\s*R?\$?\s*([\d.]+,\d{2})/i);if(m)o.valorCausa=Number(m[1].replace(/\./g,'').replace(',','.'));
+  m=t.match(/(?:Data\s+d[ae]\s+)?(?:Distribui[çc][ãa]o|Distribu[íi]do\s+em|Autua[çc][ãa]o|ajuizamento)\s*:?\s*(?:em\s+)?(\d{2}\/\d{2}\/\d{4})/i);if(m)o.distribuicao=isoBR(m[1]);
+  // partes
+  var ativos=[],passivos=[],vistos={};
+  var papeis=Object.keys(POLO_A).concat(Object.keys(POLO_P)).filter(function(k){return k!=='re'}).map(function(k){return k.replace(/e/g,'[eé]').replace(/a/g,'[aá]').replace(/ /g,'\\s+')});
+  var re=new RegExp('(?:^|\\n)\\s*('+papeis.join('|')+'|r[ée])(?:\\s*\\((?:a|s|es|as)\\))?\\s*:\\s*([^\\n]{3,160})','gi');
+  while((m=re.exec(t))){
+    var papel=semAc(m[1]),nome=m[2];
+    var doc=(nome.match(/\d{3}\.\d{3}\.\d{3}-\d{2}|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/)||[''])[0];
+    nome=nome.split(/\s+[-–]\s+|\s*\(|\s*,?\s*(?:CPF|CNPJ|RG|OAB|Advogad|ADVOGAD|representad|REPRESENTAD)|\s{2,}/)[0].replace(/[;:,]+$/,'').trim();
+    if(nome.length<3||/^(n[ãa]o|sem|e outros?)$/i.test(nome))continue;
+    var k=semAc(nome);if(vistos[k])continue;vistos[k]=1;
+    var ehA=!!POLO_A[papel],item={nome:nome,doc:doc,polo:POLO_A[papel]||POLO_P[papel]||'Réu'};
+    (ehA?ativos:passivos).push(item);
+  }
+  o.ativos=ativos.slice(0,4);o.passivos=passivos.slice(0,4);
+  var base=semAc(o.objeto);
+  o.area=/^TRT/.test(o.tribunal||'')||/trabalh|reclamacao/.test(base)?'Trabalhista':/penal|crim|inquerito|habeas/.test(base)?'Criminal':/alimento|divorcio|guarda|familia|uniao estavel|paternidade/.test(base)?'Família':/inventario|arrolamento|testament|sucess/.test(base)?'Sucessões':/execucao fiscal|tribut|icms|iptu|\biss\b/.test(base)?'Tributário':/previd|aposentad|beneficio|inss|auxilio/.test(base)?'Previdenciário':/condomin/.test(base)?'Condominial':/consum/.test(base)?'Consumidor':/locac|despejo|usucapi|imovel|imobili|posse/.test(base)?'Imobiliário':'Cível';
+  o.fase=/cumprimento|execucao/.test(base)?'Cumprimento/Execução':/apelacao|agravo|recurso|embargos de declaracao/.test(base)?'Recursal':'Conhecimento';
+  return o;
+}
+function acharPessoa(nome,doc){var k=semAc(nome),d=String(doc||'').replace(/\D/g,'');return S.clientes.find(function(c){return (d&&String(c.doc||'').replace(/\D/g,'')===d)||semAc(c.nome)===k})||null}
+var AUTOS={};
+function procAutos(){
+  AUTOS={};
+  openModal('<div class="hd"><h2>'+ic('pdf')+' Cadastrar processo pelo PDF</h2><button class="x" onclick="closeModal()" aria-label="Fechar">×</button></div><div class="bd block" style="display:flex;flex-direction:column;gap:12px">'+
+   '<div style="color:var(--muted);font-size:13.5px">Escolha a cópia do processo baixada do site do tribunal (PJe, Projudi, eproc, e-SAJ). O sistema lê o PDF aqui no navegador, encontra número, classe, vara, comarca, valor da causa e partes, e abre o cadastro já preenchido para você conferir.</div>'+
+   '<div class="f"><label for="au-file">Arquivo PDF</label><input type="file" id="au-file" accept="application/pdf,.pdf,.txt,text/plain" onchange="autosLer2(this)"><div class="hint" id="au-info"></div></div>'+
+   '<div id="au-prev" style="display:flex;flex-direction:column;gap:10px"></div>'+
+   '<details><summary style="cursor:pointer;font-size:13px;color:var(--muted)">Ou cole o texto da capa / da inicial</summary><textarea id="au-txt" rows="6" style="width:100%;margin-top:6px" oninput="clearTimeout(AUTOS.t);AUTOS.t=setTimeout(autosAnalisar,500)" placeholder="Cole aqui o texto"></textarea></details>'+
+   '</div><div class="ft"><span></span><div class="r"><button class="btn" onclick="closeModal()">Cancelar</button>'+(SAMPLE?'<button class="btn" id="au-go" onclick="autosRun()">'+ic('spark')+'Analisar com IA</button>':'')+'<button class="btn pri" id="au-ok" onclick="autosPreencher()" disabled>Abrir cadastro preenchido</button></div></div>',true);
+}
+async function autosLer2(inp){AUTOS.file=inp.files[0]||null;await autosLer(inp);autosAnalisar()}
+function autosAnalisar(){
+  var ta=document.getElementById('au-txt'),pv=document.getElementById('au-prev'),ok=document.getElementById('au-ok');if(!ta||!pv)return;
+  var t=ta.value;if(!t.trim()){pv.innerHTML='';ok.disabled=true;return}
+  var o=AUTOS.o=lerAutos(t);
+  var linhas=[['Número',o.numero],['Tribunal',[o.tribunal,o.uf].filter(Boolean).join(' · ')],['Ação / objeto',o.objeto],['Vara / órgão',o.orgao],['Comarca',o.comarca],['Valor da causa',o.valorCausa!=null?money(o.valorCausa):''],['Distribuição',o.distribuicao?fd(o.distribuicao):''],['Área · fase',o.area+' · '+o.fase]];
+  var achou=linhas.slice(0,7).filter(function(l){return l[1]}).length;
+  var h='<div class="panel" style="padding:12px 14px"><div style="font-weight:600;margin-bottom:6px">Dados encontrados</div><table style="width:100%;font-size:13px">'+linhas.map(function(l){return '<tr><td style="color:var(--muted);padding:2px 10px 2px 0;white-space:nowrap;vertical-align:top">'+l[0]+'</td><td>'+(l[1]?esc(l[1]):'<span style="color:var(--muted)">não encontrado</span>')+'</td></tr>'}).join('')+'</table></div>';
+  var partes=o.ativos.map(function(p,i){return ['a',i,p]}).concat(o.passivos.map(function(p,i){return ['p',i,p]}));
+  if(partes.length){
+    var pre=null;partes.forEach(function(x){var c=acharPessoa(x[2].nome,x[2].doc);if(c&&c.tipo!=='Parte contrária'&&!pre)pre=x[0]+x[1]});
+    h+='<div class="panel" style="padding:12px 14px"><div style="font-weight:600;margin-bottom:6px">Quem é o cliente do escritório?</div>'+partes.map(function(x){var c=acharPessoa(x[2].nome,x[2].doc),id=x[0]+x[1];
+      return '<label style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;font-size:13.5px;cursor:pointer"><input type="radio" name="au-cli" value="'+id+'"'+(pre===id?' checked':'')+'><span><b>'+esc(x[2].nome)+'</b> <span style="color:var(--muted)">· '+(x[0]==='a'?'polo ativo':'polo passivo')+' ('+esc(x[2].polo)+')'+(x[2].doc?' · '+esc(x[2].doc):'')+(c?' · já cadastrado em Pessoas':'')+'</span></span></label>'}).join('')+
+      '<label style="display:flex;gap:8px;padding:4px 0;font-size:13.5px;cursor:pointer"><input type="radio" name="au-cli" value=""'+(pre?'':' checked')+'><span>Escolher depois no cadastro</span></label></div>';
+  } else h+='<div class="hint">Não encontrei as partes no texto. Você poderá informá-las no cadastro.</div>';
+  if(AUTOS.file&&/pdf/i.test(AUTOS.file.type||AUTOS.file.name)&&ASSETS)h+='<label style="display:flex;gap:8px;font-size:13.5px"><input type="checkbox" id="au-guardar" checked> Guardar o PDF em Documentos, vinculado ao processo</label>';
+  if(o.numero){var ja=S.processos.find(function(p){return (p.numero||'').replace(/\D/g,'')===o.numero.replace(/\D/g,'')});if(ja)h='<div class="banner warn"><span>Este processo já está cadastrado. <a href="#" onclick="closeModal();verProcesso(\''+ja.id+'\');return false">Abrir o cadastro existente</a></span></div>'+h}
+  if(!achou)h='<div class="banner warn"><span>Não encontrei dados do processo no texto. Se o PDF for digitalizado (imagem), cadastre manualmente ou cole o texto da capa abaixo.</span></div>';
+  pv.innerHTML=h;ok.disabled=!achou;
+}
+async function autosPreencher(){
+  var o=AUTOS.o;if(!o)return;
+  var sel=(document.querySelector('input[name="au-cli"]:checked')||{}).value||'';
+  var guardar=!!(document.getElementById('au-guardar')||{}).checked,file=AUTOS.file;
+  var pre={numero:o.numero||'',tribunal:o.tribunal||'',uf:o.uf||'',objeto:o.objeto||'',orgao:o.orgao||'',comarca:o.comarca||'',area:o.area,fase:o.fase,situacao:'Em andamento',responsavel:equipe()[0]||''};
+  if(o.valorCausa!=null)pre.valorCausa=o.valorCausa;if(o.distribuicao)pre.distribuicao=o.distribuicao;
+  var notas=[];
+  if(sel){
+    var lado=sel[0]==='a'?o.ativos:o.passivos,outro=sel[0]==='a'?o.passivos:o.ativos,p=lado[+sel.slice(1)];
+    var c=acharPessoa(p.nome,p.doc);
+    try{
+      if(!c){var doc=p.doc||'',pj=doc.length>14||/\b(ltda|s\.?\s?a\.?|eireli|me|epp|cooperativa|associa[cç][aã]o|banco|condom[ií]nio|munic[ií]pio|estado|uni[aã]o|instituto|funda[cç][aã]o)\b/i.test(p.nome);
+        var nid=await save('clientes',{nome:p.nome,doc:doc,pessoa:pj?'Jurídica':'Física',tipo:'Cliente',origem:'Outro'});c={id:nid};notas.push(p.nome+' foi criado em Pessoas')}
+      pre.cliente=c.id;pre.polo=p.polo;
+    }catch(e){}
+    if(outro.length){pre.parteContraria=outro.map(function(x){return x.nome}).join('; ');var pc=outro.length===1&&acharPessoa(outro[0].nome,outro[0].doc);if(pc)pre.parteContrariaId=pc.id}
+  } else {
+    var tx=[];if(o.ativos.length)tx.push('Polo ativo: '+o.ativos.map(function(x){return x.nome}).join('; '));if(o.passivos.length)tx.push('Polo passivo: '+o.passivos.map(function(x){return x.nome}).join('; '));
+    if(tx.length)pre.obs='Partes nos autos — '+tx.join(' · ');
+  }
+  closeModal();
+  openForm('processos','processo',F_PROC,null,pre,async function(nid){
+    if(!nid)return;
+    if(guardar&&file){try{var arq=await uploadArquivo(file);await save('documentos',{nome:'Cópia do processo '+(pre.numero||''),tipo:'Outro',data:today(),cliente:pre.cliente||'',processo:nid,arquivo:arq,obs:'Importado ao cadastrar o processo pelo PDF'});toast('Processo salvo e PDF guardado em Documentos')}catch(e){toast('Processo salvo, mas não foi possível guardar o PDF')}}
+    verProcesso(nid);
+  });
+  toast(notas.length?notas.join('. ')+'. Confira e salve.':'Dados preenchidos: confira e salve');
+}
 
 boot();
 </script>
