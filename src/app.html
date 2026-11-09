@@ -2356,5 +2356,83 @@ function finTabs(){var c=S.faturas.filter(function(f){var e=etapaAtual(f);return
   return '<div class="tabs" style="margin:-4px 0 14px"><button class="'+(R==='faturas'?'on':'')+'" onclick="go(\'faturas\')">Faturas</button><button class="'+(R==='cobranca'?'on':'')+'" onclick="go(\'cobranca\')">Cobrança'+(c?' <span class="pill">'+c+'</span>':'')+'</button></div>'}
 (function(){var _vf=vFaturas,_vc=vCobranca;vFaturas=function(){return finTabs()+_vf.apply(this,arguments)};vCobranca=function(){return finTabs()+_vc.apply(this,arguments)}})();
 
+/* ===== Fatura no modelo do escritório (Fatura de Honorários) ===== */
+function extenso(v){
+  v=Math.round((Number(v)||0)*100);var re=Math.floor(v/100),ce=v%100;
+  var U=['','um','dois','três','quatro','cinco','seis','sete','oito','nove','dez','onze','doze','treze','catorze','quinze','dezesseis','dezessete','dezoito','dezenove'],
+      D=['','','vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa'],
+      C=['','cento','duzentos','trezentos','quatrocentos','quinhentos','seiscentos','setecentos','oitocentos','novecentos'];
+  function ate999(n){if(n===100)return 'cem';var c=Math.floor(n/100),r=n%100,p=[];if(c)p.push(C[c]);if(r<20){if(r)p.push(U[r])}else{p.push(D[Math.floor(r/10)]+(r%10?' e '+U[r%10]:''))}return p.join(' e ')}
+  function num(n){if(!n)return 'zero';var g=[[1e9,'bilhão','bilhões'],[1e6,'milhão','milhões'],[1e3,'mil','mil']],p=[],resto=n;
+    g.forEach(function(x){var q=Math.floor(resto/x[0]);if(q){p.push(x[0]===1e3&&q===1?'mil':ate999(q)+' '+(q>1?x[2]:x[1]));resto%=x[0]}});
+    if(resto)p.push((p.length&&(resto<100||resto%100===0)?'e ':'')+ate999(resto));return p.join(p.length>1&&!/^e /.test(p[p.length-1])?', ':' ').replace(/, e /g,' e ')}
+  var t=[];if(re)t.push(num(re)+(re%1e6===0&&re>=1e6?' de':'')+(re===1?' real':' reais'));if(ce)t.push(ate999(ce)+(ce===1?' centavo':' centavos'));
+  return t.join(' e ')||'zero reais';
+}
+var UF_NOME={AC:'do Acre',AL:'de Alagoas',AP:'do Amapá',AM:'do Amazonas',BA:'da Bahia',CE:'do Ceará',DF:'do Distrito Federal e dos Territórios',ES:'do Espírito Santo',GO:'de Goiás',MA:'do Maranhão',MT:'de Mato Grosso',MS:'de Mato Grosso do Sul',MG:'de Minas Gerais',PA:'do Pará',PB:'da Paraíba',PR:'do Paraná',PE:'de Pernambuco',PI:'do Piauí',RJ:'do Rio de Janeiro',RN:'do Rio Grande do Norte',RS:'do Rio Grande do Sul',RO:'de Rondônia',RR:'de Roraima',SC:'de Santa Catarina',SE:'de Sergipe',SP:'de São Paulo',TO:'do Tocantins'};
+function tribNome(t,uf){t=String(t||'').toUpperCase().replace(/\s/g,'');var m;
+  if((m=t.match(/^TJ([A-Z]{2})$/))&&UF_NOME[m[1]])return t+' - Tribunal de Justiça do Estado '+UF_NOME[m[1]];
+  if(t==='TJDFT')return 'TJDFT - Tribunal de Justiça do Distrito Federal e dos Territórios';
+  if((m=t.match(/^TRT(\d+)$/)))return t+' - Tribunal Regional do Trabalho da '+m[1]+'ª Região';
+  if((m=t.match(/^TRF(\d+)$/)))return t+' - Tribunal Regional Federal da '+m[1]+'ª Região';
+  return t||''}
+function dataExtenso(iso){var M=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];var d=String(iso||today()).split('-');return (+d[2])+' de '+M[+d[1]-1]+' de '+d[0]}
+function cidadeEsc(){if(CFG.cidade)return CFG.cidade;var m=String(CFG.endereco||'').match(/[–-]\s*([A-ZÀ-Ú][A-Za-zÀ-ú ]+?)\s*[–-]\s*[A-Z]{2}\b/);return m?m[1].trim():'Curitiba'}
+function fatDocHTML(f){
+  var c=byId('clientes',f.cliente)||{},p=byId('processos',f.processo),s=fatStatus(f);
+  var pag=f.pagador?(byId('clientes',f.pagador)||c):c;
+  var bruto=fatTotal(f),issPct=Number(f.iss!=null?f.iss:(CFG.iss||0))||0,iss=Math.round(bruto*issPct)/100,liq=bruto-iss;
+  var G='#8b5a14',OURO='#bd8821',L='border-bottom:1px solid #d9d2c3';
+  var rot=function(t){return '<b style="font-weight:700">'+t+':</b> '};
+  var docLbl=function(x){return (x.pessoa==='Física'||String(x.doc||'').replace(/\D/g,'').length===11)?'CPF':'CNPJ'};
+  var sec=function(t){return '<div style="margin-top:18px;padding:7px 0;border-top:1.5px solid #1a1a1a;border-bottom:1px solid #1a1a1a;font-family:Oswald,Arial Narrow,sans-serif;font-size:13.5px;letter-spacing:.08em;font-weight:600">'+t+'</div>'};
+  var banco=[CFG.banco?'no banco '+esc(CFG.banco):'',CFG.agencia?'agência: '+esc(CFG.agencia):'',CFG.conta?'conta nº: '+esc(CFG.conta):''].filter(Boolean).join(', ');
+  var dadosProc=p?[
+      ['Advogado',p.responsavel||equipe()[0]||''],['Processo',p.numero],['Contrário',p.parteContraria],['Ação',p.objeto],['Área',p.area],
+      ['Tribunal',tribNome(p.tribunal,p.uf)],['UF',p.uf,'Comarca',p.comarca],['Vara',p.orgao]
+    ].filter(function(x){return x[1]||x[3]}).map(function(x){return (x[1]?rot(x[0])+esc(x[1]):'')+(x[3]?(x[1]?' &nbsp; ':'')+rot(x[2])+esc(x[3]):'')}).join('<br>'):'';
+  var itens=(f.itens||[]).filter(function(i){return i.descricao||Number(i.valor)});
+  var comp=f.competencia||f.emissao;
+  return '<div style="width:794px;background:#fff;color:#1a1a1a;font-family:Quicksand,Segoe UI,sans-serif;font-weight:500;font-size:12px;line-height:1.55;position:relative">'+
+   '<img src="'+HEADER_IMG+'" alt="Pontes Rodrigues Sociedade de Advogados" style="display:block;width:794px;height:101px">'+
+   '<div style="padding:22px 56px 18px">'+
+   // título e numeração
+   '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px">'+
+     '<div><div style="font-family:Oswald,Arial Narrow,sans-serif;font-size:24px;font-weight:600;letter-spacing:.03em">Fatura de Honorários</div>'+
+     '<div style="margin-top:8px"><b style="font-size:12.5px">'+esc((CFG.escritorio||'').toUpperCase())+'</b>'+(CFG.cnpj?'<br>CNPJ: '+esc(CFG.cnpj):'')+(CFG.oab?'<br>'+esc(CFG.oab):'')+'<br>'+esc(CFG.endereco)+'<br>Tel.: '+esc(CFG.telefone)+' · E-mail: '+esc(CFG.email)+'</div></div>'+
+     '<table style="border-collapse:collapse;font-size:12px;min-width:250px"><tr><td style="padding:3px 10px;text-align:right;color:#555">Fatura nº</td><td style="padding:3px 0;text-align:right;font-family:Oswald,Arial Narrow,sans-serif;font-size:20px;font-weight:600">'+esc(f.numero||'')+'</td></tr>'+
+     '<tr><td style="padding:3px 10px;text-align:right;color:#555">Data de emissão</td><td style="text-align:right"><b>'+fd(f.emissao)+'</b></td></tr>'+
+     '<tr><td style="padding:3px 10px;text-align:right;color:#555">Data de vencimento</td><td style="text-align:right"><b>'+fd(f.vencimento)+'</b></td></tr>'+
+     (f.parcela?'<tr><td style="padding:3px 10px;text-align:right;color:#555">Parcela</td><td style="text-align:right"><b>'+esc(f.parcela)+'</b></td></tr>':'')+
+     (s==='Paga'?'<tr><td colspan="2" style="padding-top:6px;text-align:right"><span style="border:2px solid #2b6e40;color:#2b6e40;font-weight:700;padding:2px 10px;border-radius:4px;letter-spacing:.08em">PAGA EM '+fd((f.pagamento||{}).data)+'</span></td></tr>':'')+
+     '</table></div>'+
+   // destinatário
+   sec('DESTINATÁRIO')+
+   '<div style="padding:8px 0">'+rot('Cliente')+esc(c.nome||'')+(c.doc?'<br>'+rot(docLbl(c))+esc(c.doc):'')+((c.endereco||c.cidade)?'<br>'+rot('Endereço')+esc([c.endereco,c.cidade&&(c.cidade+(c.uf?' - '+c.uf:'')),c.cep?'CEP '+c.cep:''].filter(Boolean).join(', ')):'')+
+     (pag&&pag.nome?'<br>'+rot('Pagador')+esc(pag.nome)+(pag.doc?' · '+docLbl(pag)+': '+esc(pag.doc):''):'')+'</div>'+
+   '<div style="padding:8px 0 4px;text-align:justify">Recebemos de '+esc(pag.nome||c.nome||'')+' a quantia de <b>'+money(liq)+'</b> ('+esc(extenso(liq))+') referente à prestação de serviços de advocacia e consultoria conforme descrito abaixo.'+
+     (banco||CFG.pix?'<br>O valor total das receitas deverá ser '+(banco?'creditado '+banco+', em nome de '+esc((CFG.escritorio||'').toUpperCase()):'pago')+(CFG.pix?(banco?', ou pago via ':' via ')+'<b>PIX</b> (chave: '+esc(CFG.pix)+')':'')+'.':'')+'</div>'+
+   // resumo
+   '<div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;border-top:1.5px solid #1a1a1a;border-bottom:1.5px solid #1a1a1a;padding:8px 0"><div>'+rot('Data de vencimento')+fd(f.vencimento)+'</div><div style="text-align:right">Valor bruto: <b>'+money(bruto)+'</b><br>Valor líquido: <b>'+money(liq)+'</b></div></div>'+
+   // receitas
+   sec('RECEITAS DA FATURA')+
+   '<table style="width:100%;border-collapse:collapse;margin-top:2px"><thead><tr><th style="text-align:left;padding:6px 0;'+L+';font-size:10.5px;letter-spacing:.1em">DADOS</th><th style="text-align:left;padding:6px 8px;'+L+';font-size:10.5px;letter-spacing:.1em;width:110px">COMPETÊNCIA</th><th style="text-align:right;padding:6px 0;'+L+';font-size:10.5px;letter-spacing:.1em;width:150px">VALOR</th></tr></thead><tbody>'+
+   itens.map(function(i,k){var v=(Number(i.qtd)||1)*(Number(i.valor)||0),vl=v-Math.round(v*issPct)/100;
+     return '<tr><td style="padding:8px 8px 8px 0;vertical-align:top;'+L+'"><b>'+esc(i.descricao||'Honorários advocatícios')+'</b>'+(Number(i.qtd)>1?' ('+esc(i.qtd)+' × '+money(i.valor)+')':'')+(k===0&&dadosProc?'<div style="margin-top:4px;font-size:11.5px">'+dadosProc+'</div>':'')+'</td>'+
+       '<td style="padding:8px;vertical-align:top;'+L+'">'+fd(comp)+(f.parcela?'<br>'+rot('Parcela')+esc(f.parcela):'')+'</td>'+
+       '<td style="padding:8px 0;vertical-align:top;text-align:right;'+L+'">Bruto: '+money(v)+'<br>Líquido: '+money(vl)+'</td></tr>'}).join('')+
+   (Number(f.desconto)?'<tr><td colspan="2" style="padding:6px 0;text-align:right;'+L+'">Desconto</td><td style="padding:6px 0;text-align:right;'+L+'">− '+money(f.desconto)+'</td></tr>':'')+
+   '</tbody></table>'+
+   // totais
+   '<div style="margin-top:12px;border-top:1.5px solid #1a1a1a;padding-top:8px;text-align:right">Valor bruto: '+money(bruto)+'<br>ISS ('+String(issPct).replace('.',',')+'%): '+money(iss)+'</div>'+
+   '<div style="margin-top:8px;border-top:1.5px solid #1a1a1a;padding-top:8px;text-align:right"><span style="font-family:Oswald,Arial Narrow,sans-serif;font-size:18px;font-weight:600;color:'+G+'">Total líquido: '+money(liq)+'</span><br><span style="color:#555">'+esc(extenso(liq))+'</span></div>'+
+   (s==='Vencida'?'<div style="margin-top:6px;text-align:right;color:#a92c26">Vencida há '+fatAtraso(f)+' dias · valor atualizado em '+fd(today())+': <b>'+money(fatAtualizado(f))+'</b></div>':'')+
+   '<div style="margin-top:14px;font-size:11px;color:#444">Em caso de atraso: multa de '+esc(String(f.multa!=null?f.multa:CFG.multa).replace('.',','))+'% e juros de '+esc(String(f.juros!=null?f.juros:CFG.juros).replace('.',','))+'% ao mês, pro rata die.'+(f.obs?'<br>'+esc(f.obs):'')+'</div>'+
+   // assinatura
+   '<div style="margin:34px auto 0;width:330px;border-top:1px solid #1a1a1a;padding-top:6px;text-align:center;font-size:11.5px"><b>'+esc((CFG.escritorio||'').toUpperCase())+'</b></div>'+
+   '<div style="margin-top:16px;text-align:center">'+esc(cidadeEsc())+', '+dataExtenso(f.emissao)+'.</div>'+
+   '</div><div style="margin:0 56px;border-top:2px solid '+OURO+';padding:8px 0 20px;text-align:center;font-size:9.5px;line-height:1.55;color:#333">'+esc(CFG.endereco)+'<br>Telefone: '+esc(CFG.telefone)+' – E-mail: '+esc(CFG.email)+'<br>'+esc(CFG.site)+'</div></div>';
+}
+
 boot();
 </script>
