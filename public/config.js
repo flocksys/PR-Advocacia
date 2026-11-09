@@ -5,7 +5,7 @@ window.PR_CONFIG = {
   supabaseKey: "sb_publishable_9JXvgRnynykOzfk06VCXHw_Ohq10xoA",
   // Google Agenda e Drive (identificadores públicos do Google Cloud; a chave de API
   // deve estar restrita aos endereços do sistema)
-  googleClientId: "",
+  googleClientId: "500212215416-doj6ca4kgq28ms2v5lvk0bfnka44c9ca.apps.googleusercontent.com",
   googleApiKey: "",
-  googleAppId: ""
+  googleAppId: "500212215416"
 };
