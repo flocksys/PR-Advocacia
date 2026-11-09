@@ -1312,8 +1312,9 @@ F_PROC=[['numero','Número do processo (CNJ)','text',null,1,'Formato CNJ: NNNNNN
  ['honorarios','Honorários contratados','text',null,0,'Ex.: R$ 5.000 em 5x + 20% de êxito'],['link','Link dos autos (Projudi, PJe, e-SAJ)','text',null,1],['obs','Estratégia / observações','textarea',3,1]];
 ROUTES.forEach(function(r){if(r[0]==='clientes')r[1]='Pessoas';if(r[0]==='publicacoes')r[1]='Atos processuais'});
 var CT_T=['Cliente','Parte contrária','Advogado','Perito','Testemunha','Fornecedor','Órgão público','Outro'];
-F_CLI=[['doc','CPF / CNPJ','text',null,0,'Digite o CNPJ para preencher os demais campos automaticamente'],['pessoa','Pessoa','select',['Física','Jurídica']],['nome','Nome / razão social','text',null,1],['tipo','Categoria','select',CT_T],['email','E-mail','email'],['telefone','Telefone / WhatsApp','text'],
- ['cep','CEP','text'],['endereco','Endereço','text',null,1],['cidade','Cidade','text'],['uf','UF','text'],['contato','Pessoa de contato (PJ)','text'],['responsavel','Responsável no escritório','team'],['origem','Como chegou','select',['Indicação','Instagram','Site','Google','Cliente antigo','Outro']],
+F_CLI=[['doc','CPF / CNPJ','text',null,0,'O CNPJ preenche o restante'],['pessoa','Pessoa','select',['Física','Jurídica']],['tipo','Categoria','select',CT_T],['nome','Nome / razão social','text',null,1],
+ ['email','E-mail','email'],['telefone','Telefone / WhatsApp','text'],['contato','Pessoa de contato (PJ)','text'],['cep','CEP','text'],['cidade','Cidade','text'],['uf','UF','text'],['endereco','Endereço','text',null,1],
+ ['responsavel','Responsável no escritório','team'],['origem','Como chegou','select',['Indicação','Instagram','Site','Google','Cliente antigo','Outro']],
  ['portalMsg','Mensagem no portal do cliente','textarea',2,1,'Texto exibido ao cliente na área dele (orientações, próximos passos)'],['obs','Observações','textarea',2,1]];
 function tipoCt(c){return c.tipo||'Cliente'}
 function optsCli(){return S.clientes.filter(function(c){return tipoCt(c)==='Cliente'}).sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'','pt-BR')}).map(function(c){return [c.id,c.nome]})}
@@ -1537,7 +1538,7 @@ function vClientes(){
   var st=filterState('cli'),q=st.q.toLowerCase();st.tab=st.tab||'Cliente';
   var grupos={'Cliente':['Cliente'],'Parte contrária':['Parte contrária'],'Fornecedor':['Fornecedor'],'Outros':['Advogado','Perito','Testemunha','Órgão público','Outro']};
   var cnt=function(k){return S.clientes.filter(function(c){return grupos[k].indexOf(tipoCt(c))>=0}).length};
-  var acts=st.tab==='portal'?(CAN_WRITE?'<button class="btn" onclick="portalPublishAll()">Publicar todos</button>':''):'<button class="btn" onclick="ctCSV()">'+ic('dl')+'Exportar</button><button class="btn pri" onclick="formCliente(null,{tipo:\''+(st.tab==='Outros'||st.tab==='todos'?'Outro':st.tab)+'\',pessoa:\''+(st.tab==='Cliente'?'Física':'Jurídica')+'\',origem:\'Indicação\'})">'+ic('plus')+'Novo contato</button>';
+  var acts=st.tab==='portal'?(CAN_WRITE?'<button class="btn" onclick="portalPublishAll()">Publicar todos</button>':''):'<button class="btn" onclick="ctCSV()">'+ic('dl')+'Exportar</button><button class="btn pri" onclick="formCliente(null,{tipo:\''+(st.tab==='Outros'||st.tab==='todos'?'Outro':st.tab)+'\',pessoa:\''+(st.tab==='Cliente'?'Física':'Jurídica')+'\',origem:\'Indicação\'})">'+ic('plus')+'Nova pessoa</button>';
   var h=ph('Pessoas','Clientes, partes contrárias, fornecedores e demais pessoas ligadas ao escritório',acts);
   h+=subTabs('cli',[['Cliente','Clientes',cnt('Cliente')],['Parte contrária','Partes contrárias',cnt('Parte contrária')],['Fornecedor','Fornecedores',cnt('Fornecedor')],['Outros','Outros',cnt('Outros')],['todos','Todos',S.clientes.length],['portal','Portal do cliente',S.clientes.filter(function(c){return c.portalUser}).length]],st.tab);
   if(st.tab==='portal')return h+vPortalAdmin();
@@ -1735,7 +1736,7 @@ var NAVSUB={
  publicacoes:[['Publicações',vset('atos','tab','pub')],['Intimações eletrônicas',vset('atos','tab','int')],['Movimentações',vset('atos','tab','mov')],['-'],['Registrar publicação',vset('atos','tab','pub'),'formPub()'],['Registrar intimação',vset('atos','tab','int'),'formInt()'],['Registrar movimentação',vset('atos','tab','mov'),'formMov()']],
  atendimentos:[['Quadro (Kanban)',vset('at','view','quadro')],['Lista',vset('at','view','lista')],['A faturar',function(){var st=filterState('at');st.view='lista';st.f.cob='A faturar'}],['-'],['Novo atendimento',null,'formAtendimento()']],
  agenda:[['Próximos',vset('ag','view','lista')],['Calendário',vset('ag','view','mes')],['Tabela',vset('ag','view','tabela')],['Quadro de tarefas',vset('ag','view','kanban')],['Concluídos',vset('ag','view','feitos')],['-'],['Atendimentos',vset('ag','f.tipo','Atendimento')],['Audiências',vset('ag','f.tipo','Audiência')],['Prazos processuais',vset('ag','f.tipo','Prazo')],['Reuniões',vset('ag','f.tipo','Reunião')],['Compromissos',vset('ag','f.tipo','Compromisso')],['Tarefas',vset('ag','f.tipo','Tarefa')],['Todos os tipos',vset('ag','f.tipo','')],['-'],['Novo compromisso',null,'formAgenda()']],
- clientes:[['Clientes',vset('cli','tab','Cliente')],['Partes contrárias',vset('cli','tab','Parte contrária')],['Fornecedores',vset('cli','tab','Fornecedor')],['Outros',vset('cli','tab','Outros')],['Todos',vset('cli','tab','todos')],['Portal do cliente',vset('cli','tab','portal')],['-'],['Novo contato',null,'formCliente()']],
+ clientes:[['Clientes',vset('cli','tab','Cliente')],['Partes contrárias',vset('cli','tab','Parte contrária')],['Fornecedores',vset('cli','tab','Fornecedor')],['Outros',vset('cli','tab','Outros')],['Todos',vset('cli','tab','todos')],['Portal do cliente',vset('cli','tab','portal')],['-'],['Nova pessoa',null,'formCliente()']],
  contratos:[['Ver contratos',null],['Novo contrato',null,'formContrato()']],
  documentos:[['Ver documentos',null],['Novo documento',null,'formDoc()']],
  faturas:[['Em aberto',vset('fat','tab','abertas')],['Vencidas',vset('fat','tab','vencidas')],['Rascunhos',vset('fat','tab','rascunho')],['Pagas',vset('fat','tab','pagas')],['Todas',vset('fat','tab','todas')],['-'],['Nova fatura',null,'formFatura()']]
@@ -1940,6 +1941,13 @@ function pcCampos(){
 }
 document.addEventListener('change',function(ev){if(ev.target&&ev.target.id==='fm-tipo')pcCampos()});
 var _formClientePC=formCliente;formCliente=function(){var r=_formClientePC.apply(this,arguments);pcCampos();return r};
+(function(){var st=document.createElement('style');st.textContent=
+ '.dlg.compacto{width:min(700px,100%)}.dlg.compacto>.hd{padding:16px 24px 14px}.dlg.compacto>.hd h2{font-size:19px}'+
+ '.dlg.compacto{width:min(820px,100%)}.dlg.compacto>form>.bd{padding:18px 24px 20px;gap:12px 16px;grid-template-columns:repeat(3,minmax(0,1fr))}.dlg.compacto>form>.bd>.f.full{grid-column:1/-1}.dlg.compacto .f{gap:4px}.dlg.compacto .f label{font-size:12px}'+
+ '.dlg.compacto .f input,.dlg.compacto .f select,.dlg.compacto .f textarea{min-height:36px;padding:7px 10px;font-size:14px}'+
+ '.dlg.compacto .f .hint{font-size:11.5px}.dlg.compacto>form>.ft{padding:12px 24px}'+
+ '@media (max-width:760px){.dlg.compacto>form>.bd{padding:16px;grid-template-columns:minmax(0,1fr)}}';document.head.appendChild(st)})();
+var _formClienteC=formCliente;formCliente=function(){var r=_formClienteC.apply(this,arguments);var d=document.getElementById('dlg');if(d)d.classList.add('compacto');return r};
 
 boot();
 </script>

@@ -1,6 +1,6 @@
 """Gera public/index.html a partir de src/app.html (a interface do sistema).
 Uso: python3 tools/build.py"""
-import pathlib, re, hashlib
+import pathlib, re, hashlib, subprocess, tempfile, shutil
 
 raiz = pathlib.Path(__file__).resolve().parent.parent
 app = (raiz / 'src' / 'app.html').read_text(encoding='utf-8')
@@ -19,6 +19,15 @@ trocas = [
 ]
 for a, b in trocas:
     app = app.replace(a, b)
+
+# Confere a sintaxe do JavaScript antes de publicar (precisa do Node instalado)
+if shutil.which('node'):
+    js = app[app.index('<script>') + 8: app.rindex('</script>')]
+    with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False, encoding='utf-8') as t:
+        t.write(js)
+    r = subprocess.run(['node', '--check', t.name], capture_output=True, text=True)
+    if r.returncode:
+        raise SystemExit('Erro de sintaxe no JavaScript de src/app.html:\n' + r.stderr[:1500])
 
 # O título vai para o <head>
 m = re.match(r'\s*<title>(.*?)</title>', app)
