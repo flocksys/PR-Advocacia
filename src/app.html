@@ -808,7 +808,7 @@ async function submitForm(e){
   for(var fi=0;fi<CUR.fields.length;fi++){var ff=CUR.fields[fi];if(ff[2]!=='file')continue;var fl=fd_.get(ff[0]);
     if(fl&&fl.size){if(fl.size>20*1024*1024){toast('Arquivo acima de 20 MB');b.disabled=false;return false}toast('Enviando arquivo…');try{data[ff[0]]=await uploadArquivo(fl)}catch(err){toast(err&&err.code==='unsupported_type'?'Tipo de arquivo não aceito: envie PDF ou imagem, ou cole um link':'Não foi possível enviar o arquivo');b.disabled=false;return false}}
     else data[ff[0]]=CUR.base[ff[0]]||null}
-  CUR.fields.forEach(function(f){if(f[2]==='file')return;var v=f[2]==='advs'?fd_.getAll(f[0]):fd_.get(f[0]);if(f[2]==='number')v=(v===''||v==null)?null:Number(v);data[f[0]]=v==null?'':v});
+  CUR.fields.forEach(function(f){if(f[2]==='file')return;var v=f[2]==='advs'?fd_.getAll(f[0]):fd_.get(f[0]);if(f[2]==='number')v=(v===''||v==null)?null:Number(window.lerBR?(lerBR(v)||NaN):v);if(f[2]==='number'&&v!=null&&isNaN(v))v=null;data[f[0]]=v==null?'':v});
   if(CUR.col==='processos'&&data.numero){var p=parseCNJ(data.numero);if(p){data.numero=p.numero;if(!data.tribunal)data.tribunal=p.tribunal;if(!data.uf)data.uf=p.uf}}
   delete data.id;
   try{var nid=await save(CUR.col,data,CUR.id);var after=CUR.after;closeModal();toast('Salvo');if(after)after(nid,data)}catch(err){if(String(err&&err.message)!=='ro')toast('Erro ao salvar: '+((err&&(err.code||err.message))||'tente de novo'))}
@@ -2518,6 +2518,27 @@ async function desvincular(pid,volta){if(!confirm('Desvincular este processo? Os
     CASO_F='';var html=casoHTML(id);if(html){var alvo=bd.querySelector('.pchips');(alvo||bd.firstElementChild).insertAdjacentHTML('afterend',html)}
   }catch(e){console.warn(e)}
   return r}})();
+
+/* valores no formato brasileiro (00.000,00) em todos os campos de valor */
+(function(){
+  var D=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
+  function lerBR(t){t=String(t==null?'':t).trim().replace(/[R$\s]/g,'');if(!t)return '';
+    if(t.indexOf(',')>=0)t=t.replace(/\./g,'').replace(',','.');else if(!/^-?\d+\.\d{1,2}$/.test(t))t=t.replace(/\./g,'');
+    var n=Number(t);return isFinite(n)?String(n):''}
+  function fmtBR(v){if(v===''||v==null)return '';var n=Number(v);if(!isFinite(n))return String(v);return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+  window.lerBR=lerBR;window.fmtBR=fmtBR;
+  function mascarar(el){if(el.__br)return;var oi=el.getAttribute('oninput')||'';if(/\.qtd\b/.test(oi))return;
+    var ini=D.get.call(el);el.__br=1;el.type='text';el.setAttribute('inputmode','decimal');el.removeAttribute('step');el.style.textAlign=el.style.textAlign||'right';
+    Object.defineProperty(el,'value',{configurable:true,get:function(){return lerBR(D.get.call(this))},set:function(v){D.set.call(this,fmtBR(lerBR(v)===''?v:lerBR(v)))}});
+    D.set.call(el,fmtBR(ini));
+    el.addEventListener('input',function(){var t=D.get.call(el);var c=t.replace(/[^\d.,-]/g,'');if(c!==t)D.set.call(el,c)});
+    el.addEventListener('blur',function(){D.set.call(el,fmtBR(lerBR(D.get.call(el))))});
+    el.addEventListener('focus',function(){try{el.select()}catch(e){}});
+  }
+  function varrer(r){(r.querySelectorAll?r:document).querySelectorAll('input[type="number"][step="0.01"]').forEach(mascarar)}
+  new MutationObserver(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){if(n.nodeType===1){if(n.matches&&n.matches('input[type="number"][step="0.01"]'))mascarar(n);else varrer(n)}})})}).observe(document.documentElement,{childList:true,subtree:true});
+  varrer(document);
+})();
 
 boot();
 </script>
