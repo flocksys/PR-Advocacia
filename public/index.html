@@ -2445,6 +2445,10 @@ function fatDocHTML(f){
    '</div></div>';
 }
 
+/* ordem das abas pedida pelo escritório */
+(function(){var o=['painel','agenda','clientes','atendimentos','processos','publicacoes','calculos','contratos','faturas','cobranca','documentos','config'];
+  var r=ROUTES.filter(function(x){return x[0]!=='grp'}).sort(function(a,b){var i=o.indexOf(a[0]),j=o.indexOf(b[0]);return (i<0?99:i)-(j<0?99:j)});ROUTES.length=0;r.forEach(function(x){ROUTES.push(x)})})();
+
 boot();
 </script>
 
