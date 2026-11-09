@@ -4,7 +4,7 @@
   var cfg = window.PR_CONFIG;
   // Apaga a sessão e os dados guardados por este site no navegador (resolve travas de sessão antiga)
   function limparLocal() {
-    [localStorage, sessionStorage].forEach(function (st) { try { Object.keys(st).forEach(function (k) { if (/^sb-|supabase|^prg-/.test(k)) st.removeItem(k); }); } catch (e) {} });
+    [localStorage, sessionStorage].forEach(function (st) { try { Object.keys(st).forEach(function (k) { if (/^sb-|supabase|^prg-|^pr-sessao/.test(k)) st.removeItem(k); }); } catch (e) {} });
     try { if (navigator.serviceWorker) navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.unregister(); }); }); } catch (e) {}
     try { if (window.caches) caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); }); } catch (e) {}
   }
@@ -17,9 +17,45 @@
     });
     return;
   }
-  var sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true,
-    // Sem trava entre abas: a trava padrão pode ficar presa quando há mais de uma aba aberta
-    lock: function (name, timeout, fn) { return fn(); } } });
+  /* ---- Login próprio (sem o gerenciador de sessão do supabase-js, que travava em alguns navegadores) ---- */
+  var CHAVE = 'pr-sessao', SESSAO = null, renovando = null;
+  try { SESSAO = JSON.parse(localStorage.getItem(CHAVE) || 'null'); } catch (e) {}
+  function guardar(j) {
+    SESSAO = j ? { access_token: j.access_token, refresh_token: j.refresh_token, expires_at: j.expires_at || (Math.floor(Date.now() / 1000) + (Number(j.expires_in) || 3600)), user: j.user || (SESSAO && SESSAO.user) } : null;
+    try { if (SESSAO) localStorage.setItem(CHAVE, JSON.stringify(SESSAO)); else localStorage.removeItem(CHAVE); } catch (e) {}
+    if (SESSAO && window.SB) try { SB.realtime.setAuth(SESSAO.access_token); } catch (e) {}
+  }
+  async function auth(metodo, caminho, corpo, token) {
+    var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 15000);
+    try {
+      var h = { apikey: cfg.supabaseKey, 'Content-Type': 'application/json' }; if (token) h.Authorization = 'Bearer ' + token;
+      var r = await fetch(cfg.supabaseUrl + '/auth/v1/' + caminho, { method: metodo, headers: h, body: corpo ? JSON.stringify(corpo) : undefined, signal: ctl.signal });
+      var j = await r.json().catch(function () { return {}; });
+      if (!r.ok) return { error: { message: j.msg || j.error_description || j.message || j.error || ('HTTP ' + r.status) } };
+      return { data: j };
+    } catch (e) { return { error: { message: e.name === 'AbortError' ? 'o servidor demorou para responder' : (e.message || 'falha de conexão') } }; }
+    finally { clearTimeout(t); }
+  }
+  async function token() {
+    if (!SESSAO) return null;
+    if (SESSAO.expires_at - 60 > Date.now() / 1000) return SESSAO.access_token;
+    if (!renovando) renovando = auth('POST', 'token?grant_type=refresh_token', { refresh_token: SESSAO.refresh_token }).then(function (r) {
+      renovando = null; if (r.error) { guardar(null); return null; } guardar(r.data); return SESSAO.access_token;
+    });
+    return renovando;
+  }
+  setInterval(function () { if (SESSAO && SESSAO.expires_at - 300 < Date.now() / 1000) token(); }, 60000);
+  // Link do e-mail (confirmação de conta ou nova senha) chega com o token no endereço
+  var modoInicial = null;
+  if (location.hash.indexOf('access_token=') >= 0) {
+    var hp = new URLSearchParams(location.hash.slice(1));
+    guardar({ access_token: hp.get('access_token'), refresh_token: hp.get('refresh_token'), expires_in: hp.get('expires_in') });
+    if (hp.get('type') === 'recovery') modoInicial = 'nova';
+    history.replaceState(null, '', location.pathname + location.search);
+  } else if (location.hash.indexOf('error_description=') >= 0) {
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+  var sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { accessToken: token });
   window.SB = sb;
   // Mostra na tela qualquer erro, para facilitar o suporte
   function avisoErro(t) {
@@ -68,16 +104,19 @@
     var v = function (id) { var x = document.getElementById(id); return x ? x.value.trim() : ''; };
     var r;
     try {
-      if (modo === 'entrar') r = await sb.auth.signInWithPassword({ email: v('pr-e'), password: document.getElementById('pr-s').value });
+      var ir = encodeURIComponent(location.origin);
+      passo('Conferindo…');
+      if (modo === 'entrar') { r = await auth('POST', 'token?grant_type=password', { email: v('pr-e'), password: document.getElementById('pr-s').value }); if (!r.error) guardar(r.data); }
       else if (modo === 'criar') {
-        r = await sb.auth.signUp({ email: v('pr-e'), password: document.getElementById('pr-s').value, options: { data: { nome: v('pr-n') }, emailRedirectTo: location.origin } });
-        if (!r.error && !r.data.session) { modo = 'entrar'; return telaLogin('Conta criada. Confirme pelo link enviado ao seu e-mail e depois entre.', true); }
+        r = await auth('POST', 'signup?redirect_to=' + ir, { email: v('pr-e'), password: document.getElementById('pr-s').value, data: { nome: v('pr-n') } });
+        if (!r.error && !r.data.access_token) { modo = 'entrar'; return telaLogin('Conta criada. Confirme pelo link enviado ao seu e-mail e depois entre.', true); }
+        if (!r.error) guardar(r.data);
       } else if (modo === 'esqueci') {
-        r = await sb.auth.resetPasswordForEmail(v('pr-e'), { redirectTo: location.origin });
+        r = await auth('POST', 'recover?redirect_to=' + ir, { email: v('pr-e') });
         if (!r.error) return telaLogin('Se o e-mail estiver cadastrado, o link chegará em instantes.', true);
       } else if (modo === 'nova') {
-        r = await sb.auth.updateUser({ password: document.getElementById('pr-s').value });
-        if (!r.error) { modo = 'entrar'; location.hash = ''; return iniciar(); }
+        r = await auth('PUT', 'user', { password: document.getElementById('pr-s').value }, await token());
+        if (!r.error) { modo = 'entrar'; telaLogin('Senha alterada. Entrando…', true); return iniciar(); }
       }
       if (r && r.error) return telaLogin(traduz(r.error.message));
       telaLogin('Entrando…', true);
@@ -91,7 +130,6 @@
     if (/least/i.test(m)) return 'A senha precisa ter pelo menos 8 caracteres.';
     return m;
   }
-  sb.auth.onAuthStateChange(function (ev) { if (ev === 'PASSWORD_RECOVERY') { modo = 'nova'; telaLogin(); } });
 
   function comPrazo(p, ms, msg) { return Promise.race([p, new Promise(function (_, rej) { setTimeout(function () { rej(new Error(msg)); }, ms); })]); }
   async function iniciar() {
@@ -107,12 +145,14 @@
   function passo(t) { var m = document.querySelector('#pr-login .pr-msg'); if (m) { m.className = 'pr-msg ok'; m.textContent = t; } }
   async function iniciar2() {
     passo('Entrando… (1/3 sessão)');
-    var s = (await comPrazo(sb.auth.getSession(), 8000, 'tempo esgotado ao ler a sessão')).data.session;
-    if (!s || modo === 'nova') return telaLogin();
-    if (location.hash.indexOf('access_token') >= 0) history.replaceState(null, '', location.pathname);
+    if (modoInicial) { modo = modoInicial; modoInicial = null; return telaLogin(); }
+    var tk = await comPrazo(token(), 15000, 'tempo esgotado ao ler a sessão');
+    if (!tk) return telaLogin();
+    var s = SESSAO;
+    if (!s.user) { var u = await auth('GET', 'user', null, tk); if (u.error) { guardar(null); return telaLogin(); } s.user = u.data; guardar(s); }
     passo('Entrando… (2/3 acesso)');
     var r = await comPrazo(sb.rpc('meu_acesso'), 12000, 'tempo esgotado ao consultar o acesso');
-    if (r.error) throw new Error(r.error.message);
+    if (r.error) { if (/JWT|expired|401/i.test(r.error.message)) { guardar(null); return telaLogin('Sua sessão expirou. Entre de novo.'); } throw new Error(r.error.message); }
     ME = r.data || { id: s.user.id, email: s.user.email, equipe: false, socio: false };
     passo('Entrando… (3/3 dados)');
     var el = document.getElementById('pr-login'); if (el) el.remove();
@@ -126,7 +166,7 @@
       (ME.socio ? '<button data-a="equipe">Equipe e acessos</button>' : '') + '<button data-a="sair">Sair</button></div>';
     document.body.appendChild(u);
     u.firstChild.onclick = function () { u.classList.toggle('on'); };
-    u.querySelector('[data-a="sair"]').onclick = async function () { await sb.auth.signOut(); location.reload(); };
+    u.querySelector('[data-a="sair"]').onclick = async function () { var t = SESSAO && SESSAO.access_token; guardar(null); if (t) await auth('POST', 'logout?scope=local', null, t); location.reload(); };
     var eq = u.querySelector('[data-a="equipe"]'); if (eq) eq.onclick = function () { u.classList.remove('on'); telaEquipe(); };
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
