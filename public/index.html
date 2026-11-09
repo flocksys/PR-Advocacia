@@ -981,7 +981,7 @@ function verClienteBase(id){
   var c=byId('clientes',id);if(!c)return;
   var ps=S.processos.filter(function(p){return p.cliente===id}),at=S.atendimentos.filter(function(a){return a.cliente===id}).sort(function(a,b){return a.data<b.data?1:-1}),fs=S.faturas.filter(function(f){return f.cliente===id});
   var h='<div class="hd"><div><h2>'+esc(c.nome)+'</h2><div style="color:var(--muted);font-size:13px;margin-top:2px">'+esc([c.pessoa,c.doc].filter(Boolean).join(' · '))+'</div></div><button class="x" onclick="closeModal()" aria-label="Fechar">×</button></div><div class="bd block" style="display:flex;flex-direction:column;gap:16px">';
-  h+='<div class="dl">'+[['Telefone',c.telefone],['E-mail',c.email],['Endereço',c.endereco],['Contato',c.contato],['Origem',c.origem]].map(function(x){return '<div><span>'+x[0]+'</span><b>'+esc(x[1]||'—')+'</b></div>'}).join('')+'</div>';
+  h+='<div class="dl">'+[['Telefone',c.telefone],['E-mail',c.email],['Endereço',c.endereco],['Contato',c.contato]].concat(tipoCt(c)==='Parte contrária'?[]:[['Origem',c.origem]]).map(function(x){return '<div><span>'+x[0]+'</span><b>'+esc(x[1]||'—')+'</b></div>'}).join('')+'</div>';
   if(c.obs)h+='<div class="msg">'+esc(c.obs)+'</div>';
   h+='<div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="font-size:16px">Processos ('+ps.length+')</h3><button class="btn sm" onclick="formProcesso(null,{cliente:\''+id+'\',situacao:\'Em andamento\',fase:\'Conhecimento\'})">'+ic('plus')+'Processo</button></div>'+(ps.length?'<div class="panel rows">'+ps.map(function(p){return '<div class="row" onclick="verProcesso(\''+p.id+'\')"><span class="pill '+sitCls(p.situacao)+'">'+esc(p.situacao||'—')+'</span><div style="min-width:0"><div class="t mono">'+esc(p.numero||'Sem número')+'</div><div class="s">'+esc(p.objeto||'')+' × '+esc(p.parteContraria||'')+'</div></div><span></span></div>'}).join('')+'</div>':'<div class="empty">Nenhum processo.</div>')+'</div>';
   h+='<div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="font-size:16px">Atendimentos ('+at.length+')</h3><button class="btn sm" onclick="formAtendimento(null,{cliente:\''+id+'\',data:today(),status:\'Aberto\',cobranca:\'A faturar\',modalidade:\'Presencial\'})">'+ic('plus')+'Atendimento</button></div>'+(at.length?'<div class="panel rows">'+at.map(function(a){return '<div class="row" onclick="verAtendimento(\''+a.id+'\')">'+dateChip(a.data)+'<div style="min-width:0"><div class="t">'+esc(a.assunto)+'</div><div class="s">'+esc(a.status)+' · '+esc(a.modalidade||'')+'</div></div><span></span></div>'}).join('')+'</div>':'<div class="empty">Nenhum atendimento.</div>')+'</div>';
@@ -989,7 +989,7 @@ function verClienteBase(id){
   var cts=S.contratos.filter(function(x){return x.cliente===id});
   h+='<div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="font-size:16px">Contratos ('+cts.length+')</h3><button class="btn sm" onclick="formContrato(null,{cliente:\''+id+'\',tipo:\'Fixo (parcelado)\',status:\'Vigente\',parcelas:1,assinatura:today()})">'+ic('plus')+'Contrato</button></div>'+(cts.length?'<div class="panel rows">'+cts.map(function(c){return '<div class="row" onclick="verContrato(\''+c.id+'\')"><span class="pill '+(c.status==='Vigente'?'ok':'')+'">'+esc(c.status)+'</span><div style="min-width:0"><div class="t">'+esc(c.objeto||'Contrato')+'</div><div class="s">'+esc(c.tipo)+' · '+esc(ctrResumo(c))+'</div></div><span></span></div>'}).join('')+'</div>':'<div class="empty">Nenhum contrato.</div>')+'</div>';
   h+=docsDe('cliente',id);
-  h+='</div><div class="ft"><span></span><div class="r"><button class="btn" onclick="closeModal()">Fechar</button>'+(CAN_WRITE?'<button class="btn pri" onclick="formCliente(\''+id+'\')">Editar cliente</button>':'')+'</div></div>';
+  h+='</div><div class="ft"><span id="delzone">'+(CAN_WRITE?'<button class="btn ghost danger" onclick="askDelPessoa(\''+id+'\')">'+ic('del')+'Excluir</button>':'')+'</span><div class="r"><button class="btn" onclick="closeModal()">Fechar</button>'+(CAN_WRITE?'<button class="btn pri" onclick="formCliente(\''+id+'\')">Editar cadastro</button>':'')+'</div></div>';
   openModal(h,true);
 }
 
@@ -1569,7 +1569,7 @@ function ctCSV(){salvarArquivo('Pessoas '+today()+'.csv',csvDe(V.ctRows||S.clien
 function verCliente(id){
   verClienteBase(id);var c=byId('clientes',id);if(!c)return;var hd=document.querySelector('#dlg .hd > div > div');
   if(hd)hd.textContent=[tipoCt(c),c.pessoa,c.doc,[c.cidade,c.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ');
-  var dl=document.querySelector('#dlg .bd.block .dl');if(dl&&c.responsavel)dl.insertAdjacentHTML('beforeend','<div><span>Responsável</span><b>'+esc(c.responsavel)+'</b></div>');
+  var dl=document.querySelector('#dlg .bd.block .dl');if(dl&&c.responsavel&&tipoCt(c)!=='Parte contrária')dl.insertAdjacentHTML('beforeend','<div><span>Responsável</span><b>'+esc(c.responsavel)+'</b></div>');
   if(tipoCt(c)==='Cliente'){var bd=document.querySelector('#dlg .bd.block');if(bd)bd.insertAdjacentHTML('beforeend','<div class="banner info" style="margin:0"><span>Portal do cliente: '+(c.portalUser?'vinculado'+(c.portalPublicadoEm?', publicado em '+fd(c.portalPublicadoEm.slice(0,10)):', ainda não publicado'):'não vinculado')+'.</span>'+(CAN_WRITE?'<span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" onclick="portalLink(\''+id+'\')">Vincular</button><button class="btn sm" onclick="portalPreview(\''+id+'\')">Pré-visualizar</button>'+(c.portalUser?'<button class="btn sm pri" onclick="portalPublish(\''+id+'\')">Publicar</button>':'')+'</span>':'')+'</div>')}
 }
 
@@ -1933,6 +1933,22 @@ document.addEventListener('input',async function(ev){
   var uf=document.getElementById('fm-uf');if(uf&&x.uf)uf.value=x.uf;
   cepHint(x.rua?'Endereço preenchido. Digite o número e o complemento logo após o nome da rua.':'CEP geral da cidade: complete o endereço.');
 });
+
+/* ---------- excluir pessoa / campos da parte contrária ---------- */
+if(!ICON.del)ICON.del='<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>';
+function askDelPessoa(id){
+  var c=byId('clientes',id);if(!c)return;
+  var n={p:S.processos.filter(function(x){return x.cliente===id}).length,f:S.faturas.filter(function(x){return x.cliente===id}).length,a:S.atendimentos.filter(function(x){return x.cliente===id}).length,k:S.contratos.filter(function(x){return x.cliente===id}).length};
+  var lig=[[n.p,'processo','processos'],[n.a,'atendimento','atendimentos'],[n.k,'contrato','contratos'],[n.f,'fatura','faturas']].filter(function(x){return x[0]}).map(function(x){return x[0]+' '+(x[0]===1?x[1]:x[2])});
+  document.getElementById('delzone').innerHTML='<span class="confirm">'+(lig.length?'Há '+lig.join(', ')+(n.p+n.a+n.k+n.f===1?' ligado':' ligados')+' a esta pessoa'+(n.p+n.a+n.k+n.f===1?', que ficará':', que ficarão')+' sem cadastro vinculado. ':'')+'Excluir definitivamente? <button type="button" class="btn sm danger" onclick="delPessoa(\''+id+'\')">Sim, excluir</button><button type="button" class="btn sm" onclick="verCliente(\''+id+'\')">Não</button></span>';
+}
+async function delPessoa(id){try{await removeDoc('clientes',id);closeModal();toast('Cadastro excluído')}catch(e){toast('Não foi possível excluir')}}
+function pcCampos(){
+  var t=document.getElementById('fm-tipo');if(!t||!CUR||CUR.col!=='clientes')return;var pc=t.value==='Parte contrária';
+  ['responsavel','origem'].forEach(function(k){var f=document.getElementById('fm-'+k);if(!f)return;f.disabled=pc;var w=f.closest('.f');if(w)w.style.display=pc?'none':''});
+}
+document.addEventListener('change',function(ev){if(ev.target&&ev.target.id==='fm-tipo')pcCampos()});
+var _formClientePC=formCliente;formCliente=function(){var r=_formClientePC.apply(this,arguments);pcCampos();return r};
 
 boot();
 </script>
